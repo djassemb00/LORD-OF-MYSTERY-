@@ -19,6 +19,9 @@ mod terrain_renderer;
 mod character;
 mod character_renderer;
 mod hud;
+mod audio;
+mod network;
+mod menu;
 
 use render::GlRenderer;
 use input::InputHandler;
@@ -32,6 +35,9 @@ use terrain::TerrainWorld;
 use terrain_renderer::TerrainRenderer;
 use character_renderer::CharacterRenderer;
 use hud::{HudState, HudRenderer};
+use audio::AudioEngine;
+use network::NetworkManager;
+use menu::{MenuManager, MenuRenderer, MenuScreen, ButtonAction};
 
 use vek::Vec2;
 
@@ -70,6 +76,16 @@ struct GameState {
     // NEW: HUD
     hud_state: HudState,
     hud_renderer: HudRenderer,
+    
+    // NEW: Audio
+    audio_engine: AudioEngine,
+    
+    // NEW: Network
+    network_manager: NetworkManager,
+    
+    // NEW: Menu system
+    menu_manager: MenuManager,
+    menu_renderer: MenuRenderer,
 }
 
 impl GameState {
@@ -106,6 +122,16 @@ impl GameState {
             // Initialize HUD
             hud_state: HudState::new(),
             hud_renderer: HudRenderer::new(),
+            
+            // Initialize audio
+            audio_engine: AudioEngine::new(),
+            
+            // Initialize network
+            network_manager: NetworkManager::new(),
+            
+            // Initialize menu
+            menu_manager: MenuManager::new(),
+            menu_renderer: MenuRenderer::new(),
         }
     }
 
@@ -115,6 +141,12 @@ impl GameState {
         }
 
         if self.use_veloren {
+            // Check if menu is visible
+            if self.menu_manager.is_visible && self.menu_manager.current_screen != MenuScreen::Loading {
+                // Menu is visible, don't update game
+                return;
+            }
+            
             // NEW: Use veloren-common ECS system
             self.update_veloren();
         } else {
@@ -226,6 +258,74 @@ impl GameState {
         let pz = self.player.position.z as i32;
         self.world_manager.update_chunks(px, pz);
     }
+
+    /// Handle menu button action
+    fn handle_menu_action(&mut self, action: ButtonAction) {
+        match action {
+            ButtonAction::Play => {
+                self.menu_manager.setup_character_select(
+                    self.screen_width as f32,
+                    self.screen_height as f32,
+                );
+                self.audio_engine.play_sound(audio::SoundType::Click);
+            },
+            ButtonAction::Settings => {
+                self.menu_manager.setup_settings(
+                    self.screen_width as f32,
+                    self.screen_height as f32,
+                );
+                self.audio_engine.play_sound(audio::SoundType::Click);
+            },
+            ButtonAction::Servers => {
+                self.menu_manager.setup_server_list(
+                    self.screen_width as f32,
+                    self.screen_height as f32,
+                );
+                self.audio_engine.play_sound(audio::SoundType::Click);
+            },
+            ButtonAction::StartGame => {
+                // Hide menu and start game
+                self.menu_manager.hide();
+                self.audio_engine.play_music(audio::SoundType::Exploration);
+                tracing::info!("Game started!");
+            },
+            ButtonAction::Resume => {
+                self.menu_manager.hide();
+                self.audio_engine.play_sound(audio::SoundType::Click);
+            },
+            ButtonAction::Back => {
+                self.menu_manager.setup_main_menu(
+                    self.screen_width as f32,
+                    self.screen_height as f32,
+                );
+                self.audio_engine.play_sound(audio::SoundType::Click);
+            },
+            ButtonAction::Quit => {
+                tracing::info!("Quit requested");
+                // Would exit the app
+            },
+            ButtonAction::Connect => {
+                // Connect to selected server
+                if let Some(idx) = self.menu_manager.selected_server {
+                    let servers = network::default_servers();
+                    if let Some(server) = servers.get(idx) {
+                        self.network_manager.connect(server.clone());
+                        self.menu_manager.current_screen = MenuScreen::Loading;
+                    }
+                }
+            },
+            ButtonAction::Disconnect => {
+                self.network_manager.disconnect();
+                self.menu_manager.setup_main_menu(
+                    self.screen_width as f32,
+                    self.screen_height as f32,
+                );
+            },
+            _ => {
+                tracing::debug!("Unhandled menu action: {:?}", action);
+            },
+        }
+    }
 }
 
 /// Initialize the game
@@ -252,6 +352,14 @@ pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeInit(
         screen_height: screen_height as u32,
         ..GameState::new()
     });
+
+    // Setup main menu
+    if let Some(ref mut game_state) = state.as_mut() {
+        game_state.menu_manager.setup_main_menu(
+            screen_width as f32,
+            screen_height as f32,
+        );
+    }
 
     tracing::info!("Game state initialized successfully");
 }
@@ -352,15 +460,24 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeInitRenderer(
         } else {
             tracing::info!("Renderer initialized successfully");
         }
-        
+
         // Initialize terrain renderer
         game_state.terrain_renderer.initialize();
-        
+
         // Initialize character renderer
         game_state.character_renderer.initialize();
-        
+
         // Initialize HUD renderer
         game_state.hud_renderer.initialize();
+        
+        // Initialize menu renderer
+        game_state.menu_renderer.initialize();
+        
+        // Initialize audio engine
+        game_state.audio_engine.initialize();
+        
+        // Play main menu music
+        game_state.audio_engine.play_music(audio::SoundType::MainMenu);
     }
 }
 
@@ -492,6 +609,15 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeRenderFrame(
                 game_state.screen_width as f32,
                 game_state.screen_height as f32,
             );
+            
+            // Render menu if visible
+            if game_state.menu_manager.is_visible {
+                game_state.menu_renderer.render_menu(
+                    &game_state.menu_manager,
+                    game_state.screen_width as f32,
+                    game_state.screen_height as f32,
+                );
+            }
         }
     }
 }
@@ -507,4 +633,25 @@ pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeGetStats(
         return game_state.frame_count as i64;
     }
     0
+}
+
+/// Handle menu touch
+#[no_mangle]
+pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeMenuTouch(
+    _env: *mut (),
+    _class: *mut (),
+    x: f32,
+    y: f32,
+    is_down: bool,
+) {
+    let mut state = GAME_STATE.lock().unwrap();
+    if let Some(ref mut game_state) = state.as_mut() {
+        if is_down {
+            game_state.menu_manager.on_touch_down(x, y);
+        } else {
+            if let Some(action) = game_state.menu_manager.on_touch_up(x, y) {
+                game_state.handle_menu_action(action);
+            }
+        }
+    }
 }
