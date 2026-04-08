@@ -27,6 +27,11 @@ mod inventory;
 mod weather;
 mod entities;
 mod skills;
+mod caves;
+mod building;
+mod quests;
+mod gathering;
+mod cooking;
 
 use render::GlRenderer;
 use input::InputHandler;
@@ -48,6 +53,11 @@ use inventory::Inventory;
 use weather::DayNightCycle;
 use entities::EntityManager;
 use skills::SkillSet;
+use caves::CaveGenerator;
+use building::BuildingManager;
+use quests::QuestManager;
+use gathering::GatheringManager;
+use cooking::{RecipeManager, CookingState};
 
 use vek::Vec2;
 
@@ -111,6 +121,22 @@ struct GameState {
     
     // NEW: Skills
     skill_set: SkillSet,
+    
+    // NEW: Caves
+    cave_generator: CaveGenerator,
+    
+    // NEW: Building
+    building_manager: BuildingManager,
+    
+    // NEW: Quests
+    quest_manager: QuestManager,
+    
+    // NEW: Gathering
+    gathering_manager: GatheringManager,
+    
+    // NEW: Cooking
+    recipe_manager: RecipeManager,
+    cooking_state: CookingState,
 }
 
 impl GameState {
@@ -172,6 +198,28 @@ impl GameState {
             
             // Skills
             skill_set: SkillSet::new(),
+            
+            // Caves
+            cave_generator: CaveGenerator::new(12345),
+            
+            // Building
+            building_manager: BuildingManager::new(),
+            
+            // Quests
+            quest_manager: {
+                let mut qm = QuestManager::new();
+                for quest in quests::default_starter_quests() {
+                    qm.add_available_quest(quest);
+                }
+                qm
+            },
+            
+            // Gathering
+            gathering_manager: GatheringManager::new(),
+            
+            // Cooking
+            recipe_manager: RecipeManager::new(),
+            cooking_state: CookingState::new(),
         }
     }
 
@@ -316,6 +364,42 @@ impl GameState {
             ];
             let entity_type = entity_types[rand::random::<usize>() % entity_types.len()];
             self.entity_manager.spawn(entity_type, spawn_pos);
+        }
+        
+        // NEW: Update gathering
+        self.gathering_manager.update(self.delta_time);
+        
+        // NEW: Update cooking
+        if self.cooking_state.update(self.delta_time) {
+            // Cooking complete
+            if let Some(recipe_id) = self.cooking_state.current_recipe {
+                if let Some(recipe) = self.recipe_manager.get_recipe(recipe_id) {
+                    // Add cooking XP
+                    self.skill_set.add_skill_xp(skills::SkillType::Cooking, recipe.experience);
+                    tracing::info!("Cooked: {}", recipe.name);
+                }
+            }
+            self.cooking_state.cancel();
+        }
+        
+        // NEW: Spawn resource nodes periodically
+        if self.frame_count % 600 == 0 && self.gathering_manager.node_count() < 20 {
+            use gathering::ResourceType;
+            let angle = rand::random::<f32>() * std::f32::consts::TAU;
+            let distance = 20.0 + rand::random::<f32>() * 30.0;
+            let spawn_pos = Vec3::new(
+                player_pos.x as i32 + (angle.cos() * distance) as i32,
+                terrain_height as i32,
+                player_pos.z as i32 + (angle.sin() * distance) as i32,
+            );
+            
+            let resource_types = [
+                ResourceType::Stone,
+                ResourceType::Wood,
+                ResourceType::Herb,
+            ];
+            let resource_type = resource_types[rand::random::<usize>() % resource_types.len()];
+            self.gathering_manager.spawn_node(spawn_pos, resource_type);
         }
         
         // Update camera from ECS
