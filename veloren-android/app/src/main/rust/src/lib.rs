@@ -16,6 +16,9 @@ mod veloren_integration;
 mod terrain;
 mod terrain_mesh;
 mod terrain_renderer;
+mod character;
+mod character_renderer;
+mod hud;
 
 use render::GlRenderer;
 use input::InputHandler;
@@ -27,6 +30,8 @@ use particles::ParticleSystem;
 use veloren_integration::VelorenGameState;
 use terrain::TerrainWorld;
 use terrain_renderer::TerrainRenderer;
+use character_renderer::CharacterRenderer;
+use hud::{HudState, HudRenderer};
 
 use vek::Vec2;
 
@@ -57,6 +62,14 @@ struct GameState {
     // NEW: Terrain renderer
     terrain_renderer: TerrainRenderer,
     terrain_mesh_dirty: bool,
+    
+    // NEW: Character system
+    character_renderer: CharacterRenderer,
+    character_mesh_dirty: bool,
+    
+    // NEW: HUD
+    hud_state: HudState,
+    hud_renderer: HudRenderer,
 }
 
 impl GameState {
@@ -85,6 +98,14 @@ impl GameState {
             // Initialize terrain renderer
             terrain_renderer: TerrainRenderer::new(),
             terrain_mesh_dirty: true,
+            
+            // Initialize character renderer
+            character_renderer: CharacterRenderer::new(),
+            character_mesh_dirty: true,
+            
+            // Initialize HUD
+            hud_state: HudState::new(),
+            hud_renderer: HudRenderer::new(),
         }
     }
 
@@ -165,6 +186,19 @@ impl GameState {
         let dirty_chunks = self.terrain_world.get_dirty_chunks();
         if !dirty_chunks.is_empty() {
             self.terrain_mesh_dirty = true;
+        }
+        
+        // Mark character mesh as dirty (animation changed)
+        self.character_mesh_dirty = true;
+        
+        // Update HUD state from ECS
+        if let Some(entity) = self.veloren_state.player_entity {
+            if let Some(player) = self.veloren_state.world
+                .read_storage::<veloren_integration::AndroidPlayer>()
+                .get(entity) 
+            {
+                self.hud_state.set_health(player.health, player.max_health);
+            }
         }
         
         // Update camera from ECS
@@ -321,6 +355,12 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeInitRenderer(
         
         // Initialize terrain renderer
         game_state.terrain_renderer.initialize();
+        
+        // Initialize character renderer
+        game_state.character_renderer.initialize();
+        
+        // Initialize HUD renderer
+        game_state.hud_renderer.initialize();
     }
 }
 
@@ -381,13 +421,61 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeRenderFrame(
                 }
             }
 
+            // Rebuild character mesh if dirty
+            if game_state.character_mesh_dirty {
+                if let Some(entity) = game_state.veloren_state.player_entity {
+                    if let Some(player) = game_state.veloren_state.world
+                        .read_storage::<veloren_integration::AndroidPlayer>()
+                        .get(entity) 
+                    {
+                        // Determine animation state
+                        let anim_state = if player.velocity.y > 0.5 {
+                            character::CharacterAnimation::Jumping
+                        } else if player.velocity.y < -0.5 {
+                            character::CharacterAnimation::Falling
+                        } else if (player.velocity.x.abs() + player.velocity.z.abs()) > 5.0 {
+                            character::CharacterAnimation::Running(
+                                game_state.frame_count as f32 * 0.1
+                            )
+                        } else if (player.velocity.x.abs() + player.velocity.z.abs()) > 0.5 {
+                            character::CharacterAnimation::Walking(
+                                game_state.frame_count as f32 * 0.08
+                            )
+                        } else {
+                            character::CharacterAnimation::Idle
+                        };
+
+                        // Build character mesh
+                        let mesh = character::CharacterMesh::from_body(&player.body, &anim_state);
+                        
+                        // Update character renderer
+                        game_state.character_renderer.update_character(
+                            &mesh,
+                            player.position,
+                            player.orientation,
+                        );
+                        
+                        game_state.character_mesh_dirty = false;
+                    }
+                }
+            }
+
             // Render terrain if available
             if game_state.use_veloren && game_state.terrain_renderer.shader.is_initialized {
                 let player_pos = game_state.veloren_state.get_player_position();
+                
+                // First render terrain
                 game_state.terrain_renderer.render(
                     &view_matrix,
                     &projection_matrix,
                     player_pos,
+                );
+                
+                // Then render character
+                game_state.character_renderer.render(
+                    &view_matrix,
+                    &projection_matrix,
+                    player_pos + vek::Vec3::new(0.0, 10.0, 0.0),
                 );
             } else {
                 // Fallback to old renderer
@@ -397,6 +485,13 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeRenderFrame(
                     &projection_matrix,
                 );
             }
+            
+            // Render HUD (2D overlay)
+            game_state.hud_renderer.render_hud(
+                &game_state.hud_state,
+                game_state.screen_width as f32,
+                game_state.screen_height as f32,
+            );
         }
     }
 }
