@@ -45,9 +45,6 @@ jobs:
           toolchain: nightly
           targets: aarch64-linux-android,armv7-linux-androideabi
 
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk --version 3.1.0
-
       - name: Cache Cargo registry
         uses: actions/cache@v4
         with:
