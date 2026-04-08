@@ -42,7 +42,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: nightly
+          toolchain: stable
           targets: aarch64-linux-android,armv7-linux-androideabi
 
       - name: Cache Cargo registry
@@ -80,11 +80,14 @@ jobs:
         run: |
           echo "NDK_HOME=$NDK_HOME"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "Rust toolchain:"
+          rustc --version
+          cargo --version
           echo "Building for aarch64-linux-android..."
-          cargo build --target aarch64-linux-android --release 2>&1
+          cargo build --target aarch64-linux-android --release --verbose 2>&1 || { echo "BUILD FAILED"; exit 1; }
 
           echo "Building for armv7-linux-androideabi..."
-          cargo build --target armv7-linux-androideabi --release 2>&1
+          cargo build --target armv7-linux-androideabi --release --verbose 2>&1 || { echo "BUILD FAILED"; exit 1; }
 
       - name: Copy native libraries to jniLibs
         run: |
