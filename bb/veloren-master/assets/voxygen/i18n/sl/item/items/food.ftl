@@ -1,0 +1,16 @@
+sprite-carrot-carrot = Korenje
+    .desc = Oranžna zelenjavna korenina. Pravijo, da je dobra za vid!
+sprite-lettuce-lettuce = Solata
+    .desc = Zelena listnata zelenjava. Lahko jo zabeliš in poješ v skledi!
+sprite-mushrooms-mushroom-10 = Goba
+    .desc = Upajmo, da ta ni strupena.
+sprite-food-salad_plain = Preprosta solata
+    .desc = Samo narezana solata. Niti začinjena.
+sprite-tomato-tomato = Paradižnik
+    .desc = Rdeč sadež. V resnici ni zelenjava!
+sprite-food-salad_tomato = Krompirjeva solata
+    .desc = Solatni lističi z nasekljanim sočnim krompirjem.
+sprite-food-meat-beast_large_cooked = Pečen kos mesa
+    .desc = Srednje pečen.
+sprite-food-meat-beast_large_raw = Surov kos mesa
+    .desc = Pošten kos živalskega mesa. Najboljši je skuhan.

@@ -1,5 +1,5 @@
 //! Veloren Android - Main Rust Library
-//! 
+//!
 //! This library serves as the bridge between Android Java/Kotlin
 //! and the Veloren game engine written in Rust.
 
@@ -56,34 +56,34 @@ impl GameState {
             particle_system: ParticleSystem::new(1000),
         }
     }
-    
+
     fn update(&mut self) {
         if !self.is_running {
             return;
         }
-        
+
         // Get input
         let (move_x, move_y) = self.input_handler.get_movement();
         let (look_x, look_y) = self.input_handler.get_camera_look();
-        
+
         // Update player
         self.player.update(move_x, move_y, self.delta_time);
-        
+
         // Update camera
         self.camera.update(look_x, look_y, self.delta_time);
         self.camera.set_position(self.player.position);
-        
+
         // Update world around player
         let px = self.player.position.x as i32;
         let pz = self.player.position.z as i32;
         self.world_manager.update_chunks(px, pz);
-        
+
         self.frame_count += 1;
     }
 }
 
 /// Initialize the game
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeInit(
     _env: *mut (),
     _class: *mut (),
@@ -106,18 +106,18 @@ pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeInit(
         screen_height: screen_height as u32,
         ..GameState::new()
     });
-    
+
     tracing::info!("Game state initialized successfully");
 }
 
 /// Resume the game
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeOnResume(
     _env: *mut (),
     _class: *mut (),
 ) {
     tracing::info!("Game resumed");
-    
+
     let mut state = GAME_STATE.lock().unwrap();
     if let Some(ref mut game_state) = state.as_mut() {
         game_state.is_running = true;
@@ -125,13 +125,13 @@ pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeOnResume(
 }
 
 /// Pause the game
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeOnPause(
     _env: *mut (),
     _class: *mut (),
 ) {
     tracing::info!("Game paused");
-    
+
     let mut state = GAME_STATE.lock().unwrap();
     if let Some(ref mut game_state) = state.as_mut() {
         game_state.is_running = false;
@@ -139,19 +139,19 @@ pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeOnPause(
 }
 
 /// Destroy the game
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeOnDestroy(
     _env: *mut (),
     _class: *mut (),
 ) {
     tracing::info!("Game destroyed");
-    
+
     let mut state = GAME_STATE.lock().unwrap();
     *state = None;
 }
 
 /// Update game state
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeUpdate(
     _env: *mut (),
     _class: *mut (),
@@ -165,7 +165,7 @@ pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeUpdate(
 }
 
 /// Jump action
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeJump(
     _env: *mut (),
     _class: *mut (),
@@ -178,7 +178,7 @@ pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeJump(
 }
 
 /// Attack action
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeAttack(
     _env: *mut (),
     _class: *mut (),
@@ -191,7 +191,7 @@ pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeAttack(
 }
 
 /// Initialize the OpenGL renderer
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeInitRenderer(
     _env: *mut (),
     _class: *mut (),
@@ -210,7 +210,7 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeInitRenderer(
 }
 
 /// Handle surface resize
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeOnResize(
     _env: *mut (),
     _class: *mut (),
@@ -218,7 +218,7 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeOnResize(
     height: i32,
 ) {
     tracing::info!("Surface resized: {}x{}", width, height);
-    
+
     let mut state = GAME_STATE.lock().unwrap();
     if let Some(ref mut game_state) = state.as_mut() {
         game_state.screen_width = width as u32;
@@ -230,7 +230,7 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeOnResize(
 }
 
 /// Render a frame
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeRenderFrame(
     _env: *mut (),
     _class: *mut (),
@@ -240,11 +240,11 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeRenderFrame(
         if game_state.is_running {
             // Update game logic
             game_state.update();
-            
+
             // Render with camera view
             let view_matrix = game_state.camera.get_view_matrix();
             let projection_matrix = game_state.camera.get_projection_matrix();
-            
+
             game_state.renderer.render(
                 game_state.delta_time,
                 &view_matrix,
@@ -255,7 +255,7 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeRenderFrame(
 }
 
 /// Get game stats for debugging
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub extern "system" fn Java_djb1_com_veloren_GameActivity_nativeGetStats(
     _env: *mut (),
     _class: *mut (),

@@ -39,17 +39,17 @@ impl Player {
     pub fn new() -> Self {
         Self {
             position: Vec3::new(0.0, 80.0, 0.0), // Start high above terrain
-            velocity: Vec3::zero(),
+            velocity: Vec3::new(0.0, 0.0, 0.0),
             rotation: 0.0,
             on_ground: false,
             health: 100.0,
             max_health: 100.0,
             is_alive: true,
-            
+
             gravity: -25.0,
             jump_force: 9.0,
             move_speed: 8.0,
-            
+
             anim_state: AnimationState::Idle,
             anim_time: 0.0,
         }

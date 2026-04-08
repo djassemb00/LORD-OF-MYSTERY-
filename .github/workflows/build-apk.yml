@@ -9,9 +9,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: stable
   NDK_VERSION: "25.2.9519653"
-  ANDROID_API_LEVEL: 35
 
 jobs:
   build-apk:
@@ -34,10 +32,12 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          api-level: ${{ env.ANDROID_API_LEVEL }}
-          build-tools: '34.0.0'
-          ndk-version: ${{ env.NDK_VERSION }}
+
+      - name: Install NDK
+        run: |
+          sdkmanager "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-registry-
 
@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-index-
 
@@ -68,20 +68,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-rust-target-
 
-      - name: Install cargo-ndk (optional helper)
-        run: cargo install cargo-ndk || true
-
       - name: Build Rust library for Android
         working-directory: veloren-android/app/src/main/rust
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          NDK_HOME: ${{ env.NDK_HOME }}
         run: |
+          echo "NDK_HOME=$NDK_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
           echo "Building for aarch64-linux-android..."
-          cargo build --target aarch64-linux-android --release
+          cargo build --target aarch64-linux-android --release 2>&1
 
           echo "Building for armv7-linux-androideabi..."
-          cargo build --target armv7-linux-androideabi --release
+          cargo build --target armv7-linux-androideabi --release 2>&1
 
       - name: Copy native libraries to jniLibs
         run: |
@@ -113,23 +113,7 @@ jobs:
           path: veloren-android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      - name: Build Android APK (Release)
-        working-directory: veloren-android
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-        run: ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build may have failed (no signing config)"
-
-      - name: Upload Release APK (if exists)
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: veloren-android-release-apk
-          path: veloren-android/app/build/outputs/apk/release/app-release-unsigned.apk
-          retention-days: 14
-          if-no-files-found: ignore
-
-      - name: Upload build logs
+      - name: Upload build logs on failure
         uses: actions/upload-artifact@v4
         if: failure()
         with:
