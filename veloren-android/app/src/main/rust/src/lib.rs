@@ -22,6 +22,11 @@ mod hud;
 mod audio;
 mod network;
 mod menu;
+mod combat;
+mod inventory;
+mod weather;
+mod entities;
+mod skills;
 
 use render::GlRenderer;
 use input::InputHandler;
@@ -38,6 +43,11 @@ use hud::{HudState, HudRenderer};
 use audio::AudioEngine;
 use network::NetworkManager;
 use menu::{MenuManager, MenuRenderer, MenuScreen, ButtonAction};
+use combat::{CombatStats, CombatState, AttackType, DamageNumber};
+use inventory::Inventory;
+use weather::DayNightCycle;
+use entities::EntityManager;
+use skills::SkillSet;
 
 use vek::Vec2;
 
@@ -58,34 +68,49 @@ struct GameState {
     player: Player,
     particle_system: ParticleSystem,
     
-    // NEW: Veloren common integration
+    // Veloren integration
     veloren_state: VelorenGameState,
-    use_veloren: bool,  // Toggle between old and new system
+    use_veloren: bool,
     
-    // NEW: Veloren terrain system
+    // Terrain
     terrain_world: TerrainWorld,
-    
-    // NEW: Terrain renderer
     terrain_renderer: TerrainRenderer,
     terrain_mesh_dirty: bool,
     
-    // NEW: Character system
+    // Character
     character_renderer: CharacterRenderer,
     character_mesh_dirty: bool,
     
-    // NEW: HUD
+    // HUD
     hud_state: HudState,
     hud_renderer: HudRenderer,
     
-    // NEW: Audio
+    // Audio
     audio_engine: AudioEngine,
     
-    // NEW: Network
+    // Network
     network_manager: NetworkManager,
     
-    // NEW: Menu system
+    // Menu
     menu_manager: MenuManager,
     menu_renderer: MenuRenderer,
+    
+    // NEW: Combat
+    combat_stats: CombatStats,
+    combat_state: CombatState,
+    damage_numbers: Vec<DamageNumber>,
+    
+    // NEW: Inventory
+    inventory: Inventory,
+    
+    // NEW: Weather & Day/Night
+    day_night_cycle: DayNightCycle,
+    
+    // NEW: Entities (NPCs/Monsters)
+    entity_manager: EntityManager,
+    
+    // NEW: Skills
+    skill_set: SkillSet,
 }
 
 impl GameState {
@@ -104,34 +129,49 @@ impl GameState {
             player: Player::new(),
             particle_system: ParticleSystem::new(1000),
             
-            // Initialize veloren integration
+            // Veloren integration
             veloren_state: VelorenGameState::new(),
-            use_veloren: true,  // Start with veloren system enabled
+            use_veloren: true,
             
-            // Initialize veloren terrain
+            // Terrain
             terrain_world: TerrainWorld::new(12345, 4),
-            
-            // Initialize terrain renderer
             terrain_renderer: TerrainRenderer::new(),
             terrain_mesh_dirty: true,
             
-            // Initialize character renderer
+            // Character
             character_renderer: CharacterRenderer::new(),
             character_mesh_dirty: true,
             
-            // Initialize HUD
+            // HUD
             hud_state: HudState::new(),
             hud_renderer: HudRenderer::new(),
             
-            // Initialize audio
+            // Audio
             audio_engine: AudioEngine::new(),
             
-            // Initialize network
+            // Network
             network_manager: NetworkManager::new(),
             
-            // Initialize menu
+            // Menu
             menu_manager: MenuManager::new(),
             menu_renderer: MenuRenderer::new(),
+            
+            // Combat
+            combat_stats: CombatStats::new(),
+            combat_state: CombatState::new(),
+            damage_numbers: Vec::new(),
+            
+            // Inventory
+            inventory: Inventory::new(36), // 6x6 grid
+            
+            // Weather & Day/Night
+            day_night_cycle: DayNightCycle::new(),
+            
+            // Entities
+            entity_manager: EntityManager::new(),
+            
+            // Skills
+            skill_set: SkillSet::new(),
         }
     }
 
@@ -233,9 +273,53 @@ impl GameState {
             }
         }
         
+        // NEW: Update combat
+        self.combat_state.update(self.delta_time);
+        
+        // Handle attack input
+        if self.player.is_attacking() && !self.combat_state.is_attacking() {
+            let current_time = self.frame_count as f32 * self.delta_time;
+            if self.combat_state.start_attack(AttackType::Light, current_time) {
+                self.audio_engine.play_sound(audio::SoundType::Attack);
+                self.skill_set.add_skill_xp(skills::SkillType::Sword, 5.0);
+            }
+        }
+        
+        // Update damage numbers
+        self.damage_numbers.retain_mut(|dn| {
+            dn.update(self.delta_time);
+            !dn.is_expired()
+        });
+        
+        // NEW: Update day/night cycle
+        self.day_night_cycle.update(self.delta_time);
+        
+        // NEW: Update entities
+        self.entity_manager.update(player_pos, self.delta_time);
+        
+        // Spawn entities if needed (demo)
+        if self.entity_manager.alive_count() < 5 && self.frame_count % 300 == 0 {
+            use entities::{EntityType, EntityManager};
+            let angle = rand::random::<f32>() * std::f32::consts::TAU;
+            let distance = 30.0 + rand::random::<f32>() * 20.0;
+            let spawn_pos = Vec3::new(
+                player_pos.x + angle.cos() * distance,
+                terrain_height + 2.0,
+                player_pos.z + angle.sin() * distance,
+            );
+            
+            let entity_types = [
+                EntityType::Slime,
+                EntityType::Skeleton,
+                EntityType::Zombie,
+                EntityType::Spider,
+            ];
+            let entity_type = entity_types[rand::random::<usize>() % entity_types.len()];
+            self.entity_manager.spawn(entity_type, spawn_pos);
+        }
+        
         // Update camera from ECS
         if let Some(view) = self.veloren_state.get_camera_view_matrix() {
-            // TODO: Pass to renderer
             let _ = view;
         }
     }
