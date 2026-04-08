@@ -12,6 +12,7 @@ mod world;
 mod camera;
 mod player;
 mod particles;
+mod veloren_integration;
 
 use render::GlRenderer;
 use input::InputHandler;
@@ -20,6 +21,9 @@ use world::WorldManager;
 use camera::Camera;
 use player::Player;
 use particles::ParticleSystem;
+use veloren_integration::VelorenGameState;
+
+use vek::Vec2;
 
 // Game state
 static GAME_STATE: Mutex<Option<GameState>> = Mutex::new(None);
@@ -37,6 +41,10 @@ struct GameState {
     camera: Camera,
     player: Player,
     particle_system: ParticleSystem,
+    
+    // NEW: Veloren common integration
+    veloren_state: VelorenGameState,
+    use_veloren: bool,  // Toggle between old and new system
 }
 
 impl GameState {
@@ -54,6 +62,10 @@ impl GameState {
             camera: Camera::new(),
             player: Player::new(),
             particle_system: ParticleSystem::new(1000),
+            
+            // Initialize veloren integration
+            veloren_state: VelorenGameState::new(),
+            use_veloren: true,  // Start with veloren system enabled
         }
     }
 
@@ -62,6 +74,43 @@ impl GameState {
             return;
         }
 
+        if self.use_veloren {
+            // NEW: Use veloren-common ECS system
+            self.update_veloren();
+        } else {
+            // OLD: Use simple system
+            self.update_legacy();
+        }
+
+        self.frame_count += 1;
+    }
+    
+    /// Update using veloren-common ECS
+    fn update_veloren(&mut self) {
+        // Get input from touch handler
+        let (move_x, move_y) = self.input_handler.get_movement();
+        let (look_x, look_y) = self.input_handler.get_camera_look();
+        
+        // Pass to veloren ECS
+        self.veloren_state.set_player_input(
+            Vec2::new(move_x, move_y),
+            Vec2::new(look_x, look_y),
+            self.player.is_jumping(),
+            self.player.is_attacking(),
+        );
+        
+        // Update ECS systems
+        self.veloren_state.update(self.delta_time);
+        
+        // Update camera from ECS
+        if let Some(view) = self.veloren_state.get_camera_view_matrix() {
+            // TODO: Pass to renderer
+            let _ = view;
+        }
+    }
+    
+    /// Update using legacy simple system
+    fn update_legacy(&mut self) {
         // Get input
         let (move_x, move_y) = self.input_handler.get_movement();
         let (look_x, look_y) = self.input_handler.get_camera_look();
@@ -77,8 +126,6 @@ impl GameState {
         let px = self.player.position.x as i32;
         let pz = self.player.position.z as i32;
         self.world_manager.update_chunks(px, pz);
-
-        self.frame_count += 1;
     }
 }
 

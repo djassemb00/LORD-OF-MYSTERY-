@@ -7,6 +7,25 @@ edition = "2021"
 name = "veloren_android"
 crate-type = ["cdylib"]
 
+# ========================
+# Veloren Dependencies
+# ========================
+[dependencies.veloren-common]
+path = "../../../../bb/veloren-master/common"
+default-features = false
+features = ["no-assets"]
+
+[dependencies.veloren-world]
+path = "../../../../bb/veloren-master/world"
+default-features = false
+
+# ========================
+# Environment Variables
+# ========================
+[package.metadata.android]
+# Skip git version check for Android builds
+VELOREN_GIT_VERSION = "android/0/0"
+
 [dependencies]
 # Android NDK
 ndk = "0.9"
@@ -28,6 +47,8 @@ lazy_static = "1.4"
 once_cell = "1.19"
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
 hashbrown = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+specs = "0.20"
 
 [profile.release]
 opt-level = 3

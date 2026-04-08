@@ -170,7 +170,17 @@ impl Player {
             self.anim_time = 0.0;
         }
     }
-    
+
+    /// Check if currently jumping
+    pub fn is_jumping(&self) -> bool {
+        self.anim_state == AnimationState::Jumping
+    }
+
+    /// Check if currently attacking
+    pub fn is_attacking(&self) -> bool {
+        self.anim_state == AnimationState::Attacking
+    }
+
     /// Check if animation is complete
     pub fn is_anim_complete(&self) -> bool {
         match self.anim_state {
