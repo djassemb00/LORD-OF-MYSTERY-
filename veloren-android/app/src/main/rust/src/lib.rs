@@ -14,6 +14,8 @@ mod player;
 mod particles;
 mod veloren_integration;
 mod terrain;
+mod terrain_mesh;
+mod terrain_renderer;
 
 use render::GlRenderer;
 use input::InputHandler;
@@ -24,6 +26,7 @@ use player::Player;
 use particles::ParticleSystem;
 use veloren_integration::VelorenGameState;
 use terrain::TerrainWorld;
+use terrain_renderer::TerrainRenderer;
 
 use vek::Vec2;
 
@@ -50,6 +53,10 @@ struct GameState {
     
     // NEW: Veloren terrain system
     terrain_world: TerrainWorld,
+    
+    // NEW: Terrain renderer
+    terrain_renderer: TerrainRenderer,
+    terrain_mesh_dirty: bool,
 }
 
 impl GameState {
@@ -74,6 +81,10 @@ impl GameState {
             
             // Initialize veloren terrain
             terrain_world: TerrainWorld::new(12345, 4),
+            
+            // Initialize terrain renderer
+            terrain_renderer: TerrainRenderer::new(),
+            terrain_mesh_dirty: true,
         }
     }
 
@@ -149,6 +160,12 @@ impl GameState {
             player_pos.z as i32,
         );
         self.terrain_world.update_around(player_wpos);
+        
+        // Check if terrain mesh needs rebuild
+        let dirty_chunks = self.terrain_world.get_dirty_chunks();
+        if !dirty_chunks.is_empty() {
+            self.terrain_mesh_dirty = true;
+        }
         
         // Update camera from ECS
         if let Some(view) = self.veloren_state.get_camera_view_matrix() {
@@ -301,6 +318,9 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeInitRenderer(
         } else {
             tracing::info!("Renderer initialized successfully");
         }
+        
+        // Initialize terrain renderer
+        game_state.terrain_renderer.initialize();
     }
 }
 
@@ -340,11 +360,43 @@ pub extern "system" fn Java_djb1_com_veloren_VelorenRenderer_nativeRenderFrame(
             let view_matrix = game_state.camera.get_view_matrix();
             let projection_matrix = game_state.camera.get_projection_matrix();
 
-            game_state.renderer.render(
-                game_state.delta_time,
-                &view_matrix,
-                &projection_matrix,
-            );
+            // If terrain mesh is dirty, rebuild it
+            if game_state.terrain_mesh_dirty {
+                // Get first chunk mesh (simplified - should iterate all chunks)
+                let dirty_chunks = game_state.terrain_world.get_dirty_chunks();
+                if let Some((_pos, chunk)) = dirty_chunks.first() {
+                    // Generate mesh with greedy meshing
+                    let mesh = terrain_mesh::generate_chunk_mesh_greedy(chunk);
+                    
+                    // Update terrain renderer
+                    game_state.terrain_renderer.update_mesh(&mesh);
+                    
+                    // Mark chunk as clean
+                    game_state.terrain_world.mark_chunk_clean(*_pos);
+                }
+                
+                // If no dirty chunks, mark as clean
+                if dirty_chunks.is_empty() {
+                    game_state.terrain_mesh_dirty = false;
+                }
+            }
+
+            // Render terrain if available
+            if game_state.use_veloren && game_state.terrain_renderer.shader.is_initialized {
+                let player_pos = game_state.veloren_state.get_player_position();
+                game_state.terrain_renderer.render(
+                    &view_matrix,
+                    &projection_matrix,
+                    player_pos,
+                );
+            } else {
+                // Fallback to old renderer
+                game_state.renderer.render(
+                    game_state.delta_time,
+                    &view_matrix,
+                    &projection_matrix,
+                );
+            }
         }
     }
 }
