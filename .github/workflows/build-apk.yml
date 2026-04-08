@@ -1,0 +1,140 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master", "dev" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: stable
+  NDK_VERSION: "25.2.9519653"
+  ANDROID_API_LEVEL: 35
+
+jobs:
+  build-apk:
+    name: Build Veloren Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          build-tools: '34.0.0'
+          ndk-version: ${{ env.NDK_VERSION }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: veloren-android/app/src/main/rust/target
+          key: ${{ runner.os }}-rust-target-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-target-
+
+      - name: Install cargo-ndk (optional helper)
+        run: cargo install cargo-ndk || true
+
+      - name: Build Rust library for Android
+        working-directory: veloren-android/app/src/main/rust
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: |
+          echo "Building for aarch64-linux-android..."
+          cargo build --target aarch64-linux-android --release
+
+          echo "Building for armv7-linux-androideabi..."
+          cargo build --target armv7-linux-androideabi --release
+
+      - name: Copy native libraries to jniLibs
+        run: |
+          mkdir -p veloren-android/app/src/main/jniLibs/arm64-v8a
+          mkdir -p veloren-android/app/src/main/jniLibs/armeabi-v7a
+
+          cp veloren-android/app/src/main/rust/target/aarch64-linux-android/release/libveloren_android.so \
+             veloren-android/app/src/main/jniLibs/arm64-v8a/
+
+          cp veloren-android/app/src/main/rust/target/armv7-linux-androideabi/release/libveloren_android.so \
+             veloren-android/app/src/main/jniLibs/armeabi-v7a/
+
+          echo "Native libraries copied successfully"
+
+      - name: Make gradlew executable
+        run: chmod +x veloren-android/gradlew
+
+      - name: Build Android APK (Debug)
+        working-directory: veloren-android
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: veloren-android-debug-apk
+          path: veloren-android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      - name: Build Android APK (Release)
+        working-directory: veloren-android
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build may have failed (no signing config)"
+
+      - name: Upload Release APK (if exists)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: veloren-android-release-apk
+          path: veloren-android/app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs
+          path: |
+            veloren-android/app/build/outputs/logs/
+            veloren-android/app/src/main/rust/target/*/release/.fingerprint/
+          retention-days: 7

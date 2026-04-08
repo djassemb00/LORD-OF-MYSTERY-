@@ -1,0 +1,56 @@
+# ========================
+# Android / IntelliJ
+# ========================
+*.iml
+.gradle
+/local.properties
+/.idea/caches/build_file_checksums.ser
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# ========================
+# Rust
+# ========================
+/target
+**/target/
+**/*.rs.bk
+*.rlib
+*.so
+*.dylib
+*.dll
+*.pdb
+Cargo.lock
+
+# ========================
+# Native libraries (generated)
+# ========================
+**/jniLibs/
+
+# ========================
+# OS / Editor
+# ========================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+*.log
+
+# ========================
+# CI / Secrets
+# ========================
+.env
+*.keystore
+*.jks
+

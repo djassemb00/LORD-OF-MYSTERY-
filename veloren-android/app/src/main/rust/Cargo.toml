@@ -1,0 +1,52 @@
+[package]
+name = "veloren-android"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "veloren_android"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Android NDK
+ndk = "0.9"
+ndk-context = "0.1"
+ndk-sys = "0.6"
+
+# OpenGL ES
+gl = "0.14"
+
+# Mathematics
+vek = { version = "0.17", default-features = false, features = ["libm"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["ansi"] }
+
+# Utilities
+lazy_static = "1.4"
+once_cell = "1.19"
+rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
+hashbrown = "0.14"
+
+# Audio (optional - cpal for Android)
+# cpal = { version = "0.15", optional = true }
+
+[features]
+default = []
+audio = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true

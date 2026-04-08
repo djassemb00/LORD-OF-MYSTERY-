@@ -1,0 +1,31 @@
+# Android
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# Rust
+veloren-android/app/src/main/rust/target/
+veloren-android/app/src/main/jniLibs/
+*.rs.bk
+
+# IDE
+*.swp
+*.swo
+*~
+.vscode/
+
+# Build outputs
+*.apk
+*.aab
+*.jks
+
+# Logs
+*.log
+app/build/
+app/src/main/rust/target/
