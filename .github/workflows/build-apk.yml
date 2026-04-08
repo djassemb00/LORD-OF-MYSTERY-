@@ -12,36 +12,31 @@ env:
   NDK_VERSION: "25.2.9519653"
 
 jobs:
-  build-apk:
-    name: Build Veloren Android APK
+  build:
+    name: Build APK
     runs-on: ubuntu-22.04
     timeout-minutes: 90
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Setup Java
-        uses: actions/setup-java@v3
+      - uses: actions/setup-java@v3
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: temurin
 
-      - name: Setup Android SDK
-        uses: nttld/setup-ndk@v1
+      - uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
           ndk-version: ${{ env.NDK_VERSION }}
           add-to-path: true
           link-to-sdk: true
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi
 
-      - name: Cache Cargo
-        uses: actions/cache@v3
+      - uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
@@ -49,28 +44,24 @@ jobs:
             veloren-android/app/src/main/rust/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
 
-      - name: Debug environment
+      - name: Env check
         run: |
-          echo "ANDROID_HOME=${{ steps.setup-ndk.outputs.ndk-path }}"
-          echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}"
-          echo "PATH=$PATH"
-          which aarch64-linux-android21-clang || echo "clang not found"
-          rustc --version
-          cargo --version
+          echo "NDK: ${{ steps.setup-ndk.outputs.ndk-path }}"
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          ls "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/" | grep clang
+          rustc --version && cargo --version
           rustup target list --installed
 
       - name: Build Rust aarch64
         working-directory: veloren-android/app/src/main/rust
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: cargo build --target aarch64-linux-android --release
 
       - name: Build Rust armv7
         working-directory: veloren-android/app/src/main/rust
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: cargo build --target armv7-linux-androideabi --release
 
       - name: Copy libs
@@ -85,8 +76,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v3
         with:
           name: app-debug.apk
           path: veloren-android/app/build/outputs/apk/debug/app-debug.apk
