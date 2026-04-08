@@ -1,23 +1,20 @@
-//! Veloren Common Integration
+//! Veloren Integration
 //!
-//! This module bridges our Android game with veloren-common,
-//! using the official ECS, character system, and world generation.
+//! This module provides ECS integration using local veloren-compatible types.
 
 // ========================
 // ECS Integration
 // ========================
 
 use specs::{
-    Builder, Component, Dispatcher, DispatcherBuilder, Entities, Entity, Join, Read, ReadStorage,
-    System, VecStorage, World, Write, WriteStorage, DenseVecStorage,
+    Builder, Component, Dispatcher, DispatcherBuilder, Entity, Join, ReadStorage,
+    System, VecStorage, World, WriteStorage,
 };
 
 use vek::{Vec2, Vec3, Vec4};
 
-// Re-export veloren-common types we use
-pub use veloren_common::comp;
-pub use veloren_common::character::{Character, CharacterId};
-pub use veloren_common::combat::{Damage, DamageSource, Knockback};
+// Re-export local types
+pub use crate::veloren_types::{Body, Block, BlockKind};
 
 // ========================
 // Android-Specific Components
@@ -95,13 +92,13 @@ impl Component for AndroidCamera {
 // Simplified Player Component
 // ========================
 
-/// Simplified player component that wraps veloren-common types
+/// Simplified player component that wraps veloren-compatible types
 #[derive(Clone, Debug)]
 pub struct AndroidPlayer {
     pub position: Vec3<f32>,
     pub velocity: Vec3<f32>,
     pub orientation: Vec4<f32>,
-    pub body: comp::Body,
+    pub body: Body,
     pub health: f32,
     pub max_health: f32,
     pub is_alive: bool,
@@ -113,7 +110,7 @@ impl Component for AndroidPlayer {
 }
 
 impl AndroidPlayer {
-    pub fn new(body: comp::Body) -> Self {
+    pub fn new(body: Body) -> Self {
         Self {
             position: Vec3::new(0.0, 200.0, 0.0),
             velocity: Vec3::zero(),
@@ -146,7 +143,7 @@ pub fn create_veloren_world() -> World {
 }
 
 /// Create a player entity with all necessary components
-pub fn create_player_entity(world: &mut World, body: comp::Body) -> Entity {
+pub fn create_player_entity(world: &mut World, body: Body) -> Entity {
     world
         .create_entity()
         .with(AndroidPlayer::new(body))
@@ -323,7 +320,7 @@ impl VelorenGameState {
         let mut world = create_veloren_world();
 
         // Create player with default humanoid body
-        let player = create_player_entity(&mut world, comp::Body::Humanoid(comp::body::Humanoid::default()));
+        let player = create_player_entity(&mut world, Body::Humanoid(veloren_types::Humanoid::default()));
         let player_entity = Some(player);
 
         // Build dispatcher
@@ -415,7 +412,7 @@ impl VelorenGameState {
     }
 
     /// Get player body type
-    pub fn get_player_body(&self) -> Option<comp::Body> {
+    pub fn get_player_body(&self) -> Option<Body> {
         if let Some(entity) = self.player_entity {
             if let Some(player) = self.world.read_storage::<AndroidPlayer>().get(entity) {
                 return Some(player.body.clone());

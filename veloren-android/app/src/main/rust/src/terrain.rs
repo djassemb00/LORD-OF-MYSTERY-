@@ -1,13 +1,13 @@
 //! Veloren Terrain System for Android
 //!
-//! Simplified terrain generation using veloren-common Block types.
-//! This is a stepping stone towards using full veloren-world generation.
+//! Simplified terrain generation using local Block types.
+//! This avoids the complex veloren-common dependency chain.
 
 use vek::{Vec2, Vec3};
 use std::collections::HashMap;
 
-// Re-export veloren-common terrain types
-pub use veloren_common::terrain::{Block, BlockKind};
+// Re-export local block types
+pub use crate::veloren_types::{Block, BlockKind};
 
 // ========================
 // Chunk Constants
@@ -43,53 +43,54 @@ pub enum AndroidBlock {
 }
 
 impl AndroidBlock {
-    /// Convert to veloren-common Block
+    /// Convert to veloren-compatible Block
     pub fn to_veloren_block(self) -> Block {
+        use crate::veloren_types::SpriteKind;
         match self {
-            AndroidBlock::Air => Block::air(veloren_common::terrain::SpriteKind::Empty),
+            AndroidBlock::Air => Block::air(SpriteKind::Empty),
             AndroidBlock::Water => Block::new(
                 BlockKind::Water,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Grass => Block::new(
                 BlockKind::Grass,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Dirt => Block::new(
                 BlockKind::Dirt,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Stone => Block::new(
                 BlockKind::Rock,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Sand => Block::new(
                 BlockKind::Sand,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Snow => Block::new(
                 BlockKind::Snow,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Wood => Block::new(
                 BlockKind::Wood,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Leaves => Block::new(
                 BlockKind::Leaves,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Ice => Block::new(
                 BlockKind::Ice,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Clay => Block::new(
                 BlockKind::Clay,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
             AndroidBlock::Gravel => Block::new(
                 BlockKind::Gravel,
-                veloren_common::terrain::SpriteKind::Empty,
+                SpriteKind::Empty,
             ),
         }
     }

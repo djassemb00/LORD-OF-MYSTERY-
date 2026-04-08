@@ -8,18 +8,9 @@ name = "veloren_android"
 crate-type = ["cdylib"]
 
 # ========================
-# Veloren Dependencies
-# ========================
-[dependencies.veloren-common]
-path = "../../../../bb/veloren-master/common"
-default-features = false
-features = ["no-assets"]
-
-# ========================
 # Environment Variables
 # ========================
 [package.metadata.android]
-# Skip git version check for Android builds
 VELOREN_GIT_VERSION = "android/0/0"
 
 [dependencies]

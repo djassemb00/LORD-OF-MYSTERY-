@@ -32,6 +32,7 @@ mod building;
 mod quests;
 mod gathering;
 mod cooking;
+mod veloren_types;
 
 use render::GlRenderer;
 use input::InputHandler;

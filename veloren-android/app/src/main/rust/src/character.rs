@@ -1,11 +1,11 @@
 //! Character System for Android
 //!
-//! 3D character rendering using veloren-common Body types.
+//! 3D character rendering using veloren-compatible Body types.
 //! Supports humanoid characters with animated limbs.
 
 use gl;
 use vek::{Vec2, Vec3, Vec4};
-use crate::veloren_integration::comp;
+use crate::veloren_types::Body;
 
 // ========================
 // Character Body Parts
@@ -96,14 +96,14 @@ impl CharacterMesh {
     }
 
     /// Build mesh from body type
-    pub fn from_body(body: &comp::Body, animation_state: &CharacterAnimation) -> Self {
+    pub fn from_body(body: &Body, animation_state: &CharacterAnimation) -> Self {
         let mut mesh = Self::new();
 
         // Determine body color based on type
         let body_color = match body {
-            comp::Body::Humanoid(_) => Vec3::new(0.85, 0.72, 0.6), // Skin tone
-            comp::Body::Dwarf(_) => Vec3::new(0.75, 0.65, 0.55),
-            comp::Body::Orc(_) => Vec3::new(0.4, 0.6, 0.35),
+            Body::Humanoid(_) => Vec3::new(0.85, 0.72, 0.6), // Skin tone
+            Body::Dwarf(_) => Vec3::new(0.75, 0.65, 0.55),
+            Body::Orc(_) => Vec3::new(0.4, 0.6, 0.35),
             _ => Vec3::new(0.7, 0.7, 0.7),
         };
 
