@@ -10,12 +10,13 @@ on:
 env:
   CARGO_TERM_COLOR: always
   NDK_VERSION: "25.2.9519653"
+  RUST_VERSION: "stable"
 
 jobs:
   build-apk:
     name: Build Veloren Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -32,18 +33,38 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-35 build-tools;35.0.0 ndk;${{ env.NDK_VERSION }}"
 
-      - name: Install NDK
+      - name: Configure NDK environment
         run: |
-          sdkmanager "ndk;${{ env.NDK_VERSION }}"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
           echo "NDK_HOME=${ANDROID_HOME}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+
+          # Add NDK LLVM toolchain to PATH (for Rust linker)
+          NDK_BIN_DIR="${ANDROID_HOME}/ndk/${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "${NDK_BIN_DIR}" >> $GITHUB_PATH
+
+          # Verify NDK installation
+          echo "NDK version: ${{ env.NDK_VERSION }}"
+          echo "NDK path: ${ANDROID_HOME}/ndk/${{ env.NDK_VERSION }}"
+          ls -la "${ANDROID_HOME}/ndk/${{ env.NDK_VERSION }}" || echo "NDK not found at expected path"
+
+          # Verify clang is available
+          echo "Checking for clang..."
+          ls "${NDK_BIN_DIR}" | grep clang || echo "No clang binaries found"
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Install Android Rust targets
+        run: |
+          rustup target add aarch64-linux-android
+          rustup target add armv7-linux-androideabi
+          rustup target list --installed
 
       - name: Cache Cargo registry
         uses: actions/cache@v4
@@ -53,21 +74,37 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-registry-
 
-      - name: Cache Cargo index
+      - name: Cache Cargo git db
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
+          path: ~/.cargo/git/db
+          key: ${{ runner.os }}-cargo-git-db-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-index-
+            ${{ runner.os }}-cargo-git-db-
 
-      - name: Cache Rust build
+      - name: Cache Cargo build
         uses: actions/cache@v4
         with:
-          path: veloren-android/app/src/main/rust/target
-          key: ${{ runner.os }}-rust-target-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
+          path: |
+            veloren-android/app/src/main/rust/target
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-rust-target-
+            ${{ runner.os }}-cargo-build-
+
+      - name: Verify build environment
+        run: |
+          echo "=== Environment Check ==="
+          echo "Java: $(java -version 2>&1)"
+          echo "Rust: $(rustc --version)"
+          echo "Cargo: $(cargo --version)"
+          echo "Gradle: $(./veloren-android/gradlew --version 2>&1 | head -n 3)"
+          echo "Android SDK: ${ANDROID_HOME}"
+          echo "Android NDK: ${ANDROID_NDK_HOME}"
+          echo "Clang: $(which clang 2>/dev/null || echo 'not in PATH')"
+          echo "LLVM Clang: $(which aarch64-linux-android21-clang 2>/dev/null || echo 'not found')"
+          echo "==========================="
 
       - name: Build Rust library for Android
         working-directory: veloren-android/app/src/main/rust
@@ -78,28 +115,45 @@ jobs:
           VELOREN_GIT_VERSION: "android/0/0"
           RUSTFLAGS: "-C debuginfo=0"
         run: |
+          echo "=== Rust Build Configuration ==="
           echo "NDK_HOME=$NDK_HOME"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          echo "Rust toolchain:"
-          rustc --version
-          cargo --version
+          echo "Rust toolchain: $(rustc --version)"
+          echo "Cargo version: $(cargo --version)"
+          echo "Installed targets:"
+          rustup target list --installed
+          echo "================================="
+
           echo "Building for aarch64-linux-android..."
-          cargo build --target aarch64-linux-android --release --verbose 2>&1 || { echo "BUILD FAILED"; exit 1; }
+          cargo build --target aarch64-linux-android --release --verbose 2>&1 || {
+            echo "BUILD FAILED for aarch64-linux-android"
+            exit 1
+          }
+          echo "✓ aarch64-linux-android build successful"
 
           echo "Building for armv7-linux-androideabi..."
-          cargo build --target armv7-linux-androideabi --release --verbose 2>&1 || { echo "BUILD FAILED"; exit 1; }
+          cargo build --target armv7-linux-androideabi --release --verbose 2>&1 || {
+            echo "BUILD FAILED for armv7-linux-androideabi"
+            exit 1
+          }
+          echo "✓ armv7-linux-androideabi build successful"
 
       - name: Copy native libraries to jniLibs
         run: |
           mkdir -p veloren-android/app/src/main/jniLibs/arm64-v8a
           mkdir -p veloren-android/app/src/main/jniLibs/armeabi-v7a
 
-          cp veloren-android/app/src/main/rust/target/aarch64-linux-android/release/libveloren_android.so \
+          echo "Copying aarch64 library..."
+          cp -v veloren-android/app/src/main/rust/target/aarch64-linux-android/release/libveloren_android.so \
              veloren-android/app/src/main/jniLibs/arm64-v8a/
 
-          cp veloren-android/app/src/main/rust/target/armv7-linux-androideabi/release/libveloren_android.so \
+          echo "Copying armv7 library..."
+          cp -v veloren-android/app/src/main/rust/target/armv7-linux-androideabi/release/libveloren_android.so \
              veloren-android/app/src/main/jniLibs/armeabi-v7a/
 
+          echo "Verifying copied libraries..."
+          ls -lh veloren-android/app/src/main/jniLibs/arm64-v8a/
+          ls -lh veloren-android/app/src/main/jniLibs/armeabi-v7a/
           echo "Native libraries copied successfully"
 
       - name: Make gradlew executable
@@ -110,7 +164,15 @@ jobs:
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          echo "Starting Gradle build..."
+          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee gradle-build.log || {
+            echo "GRADLE BUILD FAILED"
+            echo "=== Last 100 lines of gradle-build.log ==="
+            tail -n 100 gradle-build.log
+            exit 1
+          }
+          echo "✓ APK build successful"
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -126,5 +188,6 @@ jobs:
           name: build-logs
           path: |
             veloren-android/app/build/outputs/logs/
+            veloren-android/gradle-build.log
             veloren-android/app/src/main/rust/target/*/release/.fingerprint/
           retention-days: 7
