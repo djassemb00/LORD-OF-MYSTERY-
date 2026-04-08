@@ -105,6 +105,7 @@ pub struct AndroidPlayer {
     pub health: f32,
     pub max_health: f32,
     pub is_alive: bool,
+    pub on_ground: bool,
 }
 
 impl Component for AndroidPlayer {
@@ -121,6 +122,7 @@ impl AndroidPlayer {
             health: 100.0,
             max_health: 100.0,
             is_alive: true,
+            on_ground: false,
         }
     }
 }
@@ -202,24 +204,19 @@ impl<'s> System<'s> for AndroidInputSystem {
                 player.velocity.z *= 0.8;
             }
 
-            // Jump
-            if input.jump && player.position.y <= 60.1 {
+            // Jump (check if on ground - will be updated with terrain height externally)
+            if input.jump && player.on_ground {
                 player.velocity.y = 10.0;
+                player.on_ground = false;
             }
 
             // Update position
             player.position.x += player.velocity.x * 0.016; // Assume 60 FPS
-            player.position.y += player.velocity.y * 0.016;
             player.position.z += player.velocity.z * 0.016;
 
-            // Simple gravity
-            if player.position.y > 60.0 {
-                player.velocity.y -= 0.3; // gravity
-            } else {
-                // Ground collision
-                player.position.y = 60.0;
-                player.velocity.y = 0.0;
-            }
+            // Gravity (ground height will be corrected externally)
+            player.velocity.y -= 0.3;
+            player.position.y += player.velocity.y * 0.016;
         }
     }
 }
@@ -317,6 +314,8 @@ pub struct VelorenGameState {
     pub dispatcher: Dispatcher<'static, 'static>,
     pub player_entity: Option<Entity>,
     pub tick_count: u64,
+    /// Terrain seed for height calculations
+    pub terrain_seed: u64,
 }
 
 impl VelorenGameState {
@@ -338,7 +337,53 @@ impl VelorenGameState {
             dispatcher,
             player_entity,
             tick_count: 0,
+            terrain_seed: 12345,
         }
+    }
+
+    /// Calculate terrain height at world position (simple noise-based)
+    pub fn get_terrain_height(&self, wx: i32, wz: i32) -> i32 {
+        // Simple multi-octave noise (same as terrain.rs)
+        let base_height = 64;
+        let seed = self.terrain_seed;
+        let seed_offset = (seed % 2000) as i32 - 1000;
+
+        let continental = self.noise_2d(wx as f64 * 0.002, wz as f64 * 0.002, seed) * 40.0;
+        let hills = self.noise_2d(wx as f64 * 0.01, wz as f64 * 0.01, seed + 1) * 20.0;
+        let bumps = self.noise_2d(wx as f64 * 0.05, wz as f64 * 0.05, seed + 2) * 5.0;
+        let mountains = (self.noise_2d(wx as f64 * 0.001, wz as f64 * 0.001, seed + 3) * 80.0).abs();
+
+        (base_height + seed_offset / 2 + continental as i32 + hills as i32
+            + bumps as i32 + mountains as i32).max(10).min(200)
+    }
+
+    /// Simple 2D noise function
+    fn noise_2d(&self, x: f64, z: f64, seed: u64) -> f64 {
+        let ix = x.floor() as i64;
+        let iz = z.floor() as i64;
+        let fx = x - ix as f64;
+        let fz = z - iz as f64;
+
+        let sx = fx * fx * (3.0 - 2.0 * fx);
+        let sz = fz * fz * (3.0 - 2.0 * fz);
+
+        let n00 = self.hash(ix, iz, seed) / 255.0;
+        let n10 = self.hash(ix + 1, iz, seed) / 255.0;
+        let n01 = self.hash(ix, iz + 1, seed) / 255.0;
+        let n11 = self.hash(ix + 1, iz + 1, seed) / 255.0;
+
+        let nx0 = n00 * (1.0 - sx) + n10 * sx;
+        let nx1 = n01 * (1.0 - sx) + n11 * sx;
+
+        nx0 * (1.0 - sz) + nx1 * sz - 0.5
+    }
+
+    /// Simple hash function
+    fn hash(&self, x: i64, z: i64, seed: u64) -> f64 {
+        let mut h = seed.wrapping_add((x.wrapping_mul(374761393) ^ z.wrapping_mul(668265263)) as u64);
+        h = (h ^ (h >> 13)).wrapping_mul(1274126177);
+        h = h ^ (h >> 16);
+        (h & 0xFF) as f64
     }
 
     /// Update game state
@@ -367,6 +412,21 @@ impl VelorenGameState {
             }
         }
         0.0
+    }
+
+    /// Get player body type
+    pub fn get_player_body(&self) -> Option<comp::Body> {
+        if let Some(entity) = self.player_entity {
+            if let Some(player) = self.world.read_storage::<AndroidPlayer>().get(entity) {
+                return Some(player.body.clone());
+            }
+        }
+        None
+    }
+
+    /// Get tick count for debugging
+    pub fn get_tick_count(&self) -> u64 {
+        self.tick_count
     }
 
     /// Set touch input for player

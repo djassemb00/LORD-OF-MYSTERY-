@@ -13,6 +13,7 @@ mod camera;
 mod player;
 mod particles;
 mod veloren_integration;
+mod terrain;
 
 use render::GlRenderer;
 use input::InputHandler;
@@ -22,6 +23,7 @@ use camera::Camera;
 use player::Player;
 use particles::ParticleSystem;
 use veloren_integration::VelorenGameState;
+use terrain::TerrainWorld;
 
 use vek::Vec2;
 
@@ -45,6 +47,9 @@ struct GameState {
     // NEW: Veloren common integration
     veloren_state: VelorenGameState,
     use_veloren: bool,  // Toggle between old and new system
+    
+    // NEW: Veloren terrain system
+    terrain_world: TerrainWorld,
 }
 
 impl GameState {
@@ -66,6 +71,9 @@ impl GameState {
             // Initialize veloren integration
             veloren_state: VelorenGameState::new(),
             use_veloren: true,  // Start with veloren system enabled
+            
+            // Initialize veloren terrain
+            terrain_world: TerrainWorld::new(12345, 4),
         }
     }
 
@@ -101,6 +109,46 @@ impl GameState {
         
         // Update ECS systems
         self.veloren_state.update(self.delta_time);
+        
+        // Correct player Y position based on terrain height
+        let player_pos = self.veloren_state.get_player_position();
+        let terrain_height = self.veloren_state.get_terrain_height(
+            player_pos.x as i32,
+            player_pos.z as i32,
+        ) as f32;
+        
+        // Ground collision correction
+        if player_pos.y < terrain_height + 1.0 {
+            // Snap player to ground
+            if let Some(entity) = self.veloren_state.player_entity {
+                if let Some(mut player) = self.veloren_state.world
+                    .write_storage::<veloren_integration::AndroidPlayer>()
+                    .get_mut(entity) 
+                {
+                    player.position.y = terrain_height + 1.0;
+                    player.velocity.y = 0.0;
+                    player.on_ground = true;
+                }
+            }
+        } else {
+            // Mark as not on ground
+            if let Some(entity) = self.veloren_state.player_entity {
+                if let Some(mut player) = self.veloren_state.world
+                    .write_storage::<veloren_integration::AndroidPlayer>()
+                    .get_mut(entity) 
+                {
+                    player.on_ground = false;
+                }
+            }
+        }
+        
+        // Update terrain around player
+        let player_wpos = vek::Vec3::new(
+            player_pos.x as i32,
+            player_pos.y as i32,
+            player_pos.z as i32,
+        );
+        self.terrain_world.update_around(player_wpos);
         
         // Update camera from ECS
         if let Some(view) = self.veloren_state.get_camera_view_matrix() {

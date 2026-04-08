@@ -15,10 +15,6 @@ path = "../../../../bb/veloren-master/common"
 default-features = false
 features = ["no-assets"]
 
-[dependencies.veloren-world]
-path = "../../../../bb/veloren-master/world"
-default-features = false
-
 # ========================
 # Environment Variables
 # ========================
