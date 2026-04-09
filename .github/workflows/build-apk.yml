@@ -1,18 +1,19 @@
-name: Build Android APK
+name: Build Android APK - Auto Fix
 
 on:
   push:
     branches: [ "main", "master", "dev" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch:  # تشغيل يدوي
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
   NDK_VERSION: "26.2.11394342"
+  ANDROID_API: "29"
 
 jobs:
-  build:
+  build-apk:
     name: Build APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -20,78 +21,170 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      # Step 1: Setup Java
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           java-version: "17"
           distribution: temurin
 
-      - name: Setup Android NDK
+      # Step 2: Setup Android SDK & NDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: 'ndk;26.2.11394342'
 
-      - name: Set NDK Environment
+      - name: Install NDK
         run: |
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.2.11394342" >> $GITHUB_ENV
-          echo "NDK_HOME=$ANDROID_HOME/ndk/26.2.11394342" >> $GITHUB_ENV
+          sdkmanager --install "ndk;${{ env.NDK_VERSION }}"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify NDK
+        run: |
+          echo "NDK Path: $ANDROID_NDK_HOME"
+          ls -la $ANDROID_NDK_HOME
+          ls -la $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/ | grep clang
+
+      # Step 3: Setup Rust
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi
 
-      - uses: actions/cache@v4
+      - name: Install cargo-ndk (optional)
+        run: cargo install cargo-ndk || echo "cargo-ndk not needed"
+
+      - name: Verify Rust
+        run: |
+          rustc --version
+          cargo --version
+          rustup target list --installed
+
+      # Step 4: Cache
+      - name: Cache Cargo
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             veloren-android/app/src/main/rust/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('veloren-android/app/src/main/rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-      - name: Environment check
-        run: |
-          echo "NDK: ${{ steps.setup-ndk.outputs.ndk-path }}"
-          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
-          rustc --version && cargo --version
-          rustup target list --installed
-
-      - name: Build Rust aarch64
+      # Step 5: Build Rust aarch64
+      - name: Build Rust (aarch64)
         working-directory: veloren-android/app/src/main/rust
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           CC_aarch64_linux_android: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang
-        run: cargo build --target aarch64-linux-android --release -vv
+          AR_aarch64_linux_android: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+        run: |
+          echo "Building for aarch64-linux-android..."
+          echo "CC: $CC_aarch64_linux_android"
+          cargo build --target aarch64-linux-android --release -vv
 
-      - name: Build Rust armv7
+      - name: Check aarch64 build output
+        run: |
+          if [ -f "veloren-android/app/src/main/rust/target/aarch64-linux-android/release/libveloren_android.so" ]; then
+            echo "✅ aarch64 library built successfully"
+            ls -lh veloren-android/app/src/main/rust/target/aarch64-linux-android/release/libveloren_android.so
+          else
+            echo "❌ aarch64 library NOT found"
+            exit 1
+          fi
+
+      # Step 6: Build Rust armv7 (optional)
+      - name: Build Rust (armv7)
         working-directory: veloren-android/app/src/main/rust
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           CC_armv7_linux_androideabi: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi29-clang
-        run: cargo build --target armv7-linux-androideabi --release -vv || echo "armv7 build skipped"
-
-      - name: Copy libs
+          AR_armv7_linux_androideabi: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
         run: |
-          mkdir -p veloren-android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a}
-          cp veloren-android/app/src/main/rust/target/aarch64-linux-android/release/libveloren_android.so veloren-android/app/src/main/jniLibs/arm64-v8a/ || echo "aarch64 lib not found"
-          cp veloren-android/app/src/main/rust/target/armv7-linux-androideabi/release/libveloren_android.so veloren-android/app/src/main/jniLibs/armeabi-v7a/ || echo "armv7 lib not found"
+          echo "Building for armv7-linux-androideabi..."
+          cargo build --target armv7-linux-androideabi --release -vv || echo "⚠️ armv7 build failed, continuing..."
 
-      - name: Build APK
+      # Step 7: Copy libraries
+      - name: Copy native libraries
+        run: |
+          echo "Creating jniLibs directories..."
+          mkdir -p veloren-android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a}
+          
+          echo "Copying aarch64 library..."
+          if [ -f "veloren-android/app/src/main/rust/target/aarch64-linux-android/release/libveloren_android.so" ]; then
+            cp veloren-android/app/src/main/rust/target/aarch64-linux-android/release/libveloren_android.so \
+               veloren-android/app/src/main/jniLibs/arm64-v8a/
+            echo "✅ Copied aarch64 library"
+          else
+            echo "❌ aarch64 library not found!"
+            exit 1
+          fi
+          
+          echo "Copying armv7 library..."
+          if [ -f "veloren-android/app/src/main/rust/target/armv7-linux-androideabi/release/libveloren_android.so" ]; then
+            cp veloren-android/app/src/main/rust/target/armv7-linux-androideabi/release/libveloren_android.so \
+               veloren-android/app/src/main/jniLibs/armeabi-v7a/
+            echo "✅ Copied armv7 library"
+          else
+            echo "⚠️ armv7 library not found, skipping..."
+          fi
+
+      # Step 8: Setup Gradle
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: wrapper
+
+      # Step 9: Build APK
+      - name: Build Debug APK
         working-directory: veloren-android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          echo "Building debug APK..."
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
         with:
-          name: app-debug.apk
+          name: veloren-debug.apk
           path: veloren-android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
 
-      - name: Build Release APK
+      - name: Build Release APK (optional)
         working-directory: veloren-android
+        continue-on-error: true
         run: |
-          ./gradlew assembleRelease --no-daemon || echo "Release build failed (no signing)"
+          echo "Building release APK..."
+          ./gradlew assembleRelease --no-daemon --stacktrace || echo "⚠️ Release build failed (no signing config)"
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
         with:
-          name: app-release-unsigned.apk
+          name: veloren-release.apk
           path: veloren-android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: ignore
+
+      # Step 10: Summary
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "## 📦 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "veloren-android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "✅ **Debug APK:** Built successfully" >> $GITHUB_STEP_SUMMARY
+            APK_SIZE=$(du -h veloren-android/app/build/outputs/apk/debug/app-debug.apk | cut -f1)
+            echo "📏 **Size:** $APK_SIZE" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Debug APK:** Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f "veloren-android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            echo "✅ **Release APK:** Built successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Release APK:** Not built (no signing)" >> $GITHUB_STEP_SUMMARY
+          fi
