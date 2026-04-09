@@ -32,6 +32,9 @@ vek = { version = "0.16", default-features = false, features = ["libm"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["ansi"] }
 
+# ECS (Entity Component System)
+specs = { version = "0.20", default-features = false, features = ["std"] }
+
 # Utilities
 lazy_static = "1.4"
 once_cell = "1.19"

@@ -1,16 +1,43 @@
 //! Veloren Android - JNI Bridge
-//! 
+//!
 //! This module provides the interface between Java/Kotlin (Android) and Rust (Native)
 
 use std::sync::Mutex;
 use jni::JNIEnv;
-use jni::objects::{JClass, JObject};
-use jni::sys::{jint, jfloat, jboolean};
+use jni::objects::JClass;
+use jni::sys::{jint, jfloat};
 
 // Import our modules
 mod input;
 mod render;
 mod camera;
+
+// Game systems (declared but not all actively used yet)
+mod assets;
+mod audio;
+mod building;
+mod caves;
+mod character;
+mod character_renderer;
+mod combat;
+mod cooking;
+mod entities;
+mod gathering;
+mod hud;
+mod inventory;
+mod menu;
+mod network;
+mod particles;
+mod player;
+mod quests;
+mod skills;
+mod terrain;
+mod terrain_mesh;
+mod terrain_renderer;
+mod veloren_integration;
+mod veloren_types;
+mod weather;
+mod world;
 
 use input::InputHandler;
 use render::renderer::GlRenderer;
