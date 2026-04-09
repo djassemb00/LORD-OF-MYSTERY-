@@ -29,7 +29,6 @@
 *.dylib
 *.dll
 *.pdb
-Cargo.lock
 
 # ========================
 # Native libraries (generated)

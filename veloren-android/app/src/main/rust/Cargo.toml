@@ -15,9 +15,9 @@ VELOREN_GIT_VERSION = "android/0/0"
 
 [dependencies]
 # Android NDK
-ndk = "0.9"
+ndk = "0.8"
 ndk-context = "0.1"
-ndk-sys = "0.6"
+ndk-sys = "0.5"
 
 # JNI
 jni = "0.21"
@@ -26,7 +26,7 @@ jni = "0.21"
 gl = "0.14"
 
 # Mathematics
-vek = { version = "0.17", default-features = false, features = ["libm"] }
+vek = { version = "0.16", default-features = false, features = ["libm"] }
 
 # Logging
 tracing = "0.1"
@@ -38,7 +38,6 @@ once_cell = "1.19"
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
 hashbrown = "0.14"
 serde = { version = "1.0", features = ["derive"] }
-specs = "0.20"
 
 [profile.release]
 opt-level = 3
