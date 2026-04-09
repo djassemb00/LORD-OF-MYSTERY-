@@ -19,6 +19,9 @@ ndk = "0.9"
 ndk-context = "0.1"
 ndk-sys = "0.6"
 
+# JNI
+jni = "0.21"
+
 # OpenGL ES
 gl = "0.14"
 

@@ -168,7 +168,7 @@ impl GlRenderer {
         // Use shader
         if let Some(ref shader) = self.shader {
             shader.use_program();
-            
+
             // Set uniforms
             if let Some(loc) = shader.get_uniform_location("u_view") {
                 shader.set_uniform_mat4(loc, view_matrix);
@@ -176,19 +176,19 @@ impl GlRenderer {
             if let Some(loc) = shader.get_uniform_location("u_projection") {
                 shader.set_uniform_mat4(loc, projection_matrix);
             }
-            
+
             // Light direction (from above and slightly to the side)
             let light_dir = [0.5, 1.0, 0.3];
             if let Some(loc) = shader.get_uniform_location("u_light_dir") {
                 shader.set_uniform_vec3(loc, &light_dir);
             }
-            
+
             // Camera position (placeholder)
             let camera_pos = [0.0, 10.0, 20.0];
             if let Some(loc) = shader.get_uniform_location("u_camera_pos") {
                 shader.set_uniform_vec3(loc, &camera_pos);
             }
-            
+
             // Render test cubes in a grid pattern
             if let Some(ref cube) = self.test_cube {
                 for x in -3..=3 {
@@ -200,11 +200,11 @@ impl GlRenderer {
                             0.0, 0.0, 1.0, 0.0,
                             x as f32 * 3.0, 64.0, z as f32 * 3.0, 1.0,
                         ];
-                        
+
                         if let Some(loc) = shader.get_uniform_location("u_model") {
                             shader.set_uniform_mat4(loc, &model);
                         }
-                        
+
                         cube.render();
                     }
                 }
