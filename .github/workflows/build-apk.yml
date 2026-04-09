@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
+  schedule:
+    # بناء تلقائي كل يوم الساعة 12:00 UTC
+    - cron: '0 12 * * *'
+    # بناء تلقائي كل يوم أحد الساعة 6:00 UTC (أسبوعي)
+    - cron: '0 6 * * 0'
 
 env:
   CARGO_TERM_COLOR: always
