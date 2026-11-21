@@ -15,18 +15,18 @@ data class Achievement(
 object AchievementEngine {
 
     val ALL: List<Achievement> = listOf(
-        Achievement("first_pull", "أول استدعاء", "استدعِ بطاقتك الأولى", 50),
+        Achievement("first_pull", "أول استدعاء", "استدع بطاقتك الأولى", 50),
         Achievement("collector_10", "جامع البطاقات", "اجمع 10 بطاقات مختلفة", 100),
         Achievement("collector_25", "خبير المجموعة", "اجمع 25 بطاقة مختلفة", 200),
         Achievement("mythic_one", "المختار", "احصل على بطاقة إلهية", 300),
         Achievement("mythic_five", "أسطورة حية", "اجمع 5 بطاقات إلهية", 500),
-        Achievement("boss_slayer", "قاتل الزعماء", "اهزم زعيماً واحداً", 200),
+        Achievement("boss_slayer", "قاتل الزعماء", "اهزم زعيما واحدا", 200),
         Achievement("boss_master", "سيد العالم", "اهزم 5 زعماء", 500),
         Achievement("traveler", "المسافر", "زر 5 أماكن مختلفة", 100),
-        Achievement("rich", "الثري", اجمع 2000 عملة", 100),
-        Achievement("level_5", "صاعد", وصل إلى المستوى 5", 150),
-        Achievement("level_10", "أسطوري", وصل إلى المستوى 10", 400),
-        Achievement("max_card", "الكمال", ارفع بطاقة إلى المستوى 10", 300),
+        Achievement("rich", "الثري", "اجمع 2000 عملة", 100),
+        Achievement("level_5", "صاعد", "وصل إلى المستوى 5", 150),
+        Achievement("level_10", "أسطوري", "وصل إلى المستوى 10", 400),
+        Achievement("max_card", "الكمال", "ارفع بطاقة إلى المستوى 10", 300),
     )
 
     fun check(save: SaveManager): List<Achievement> {
