@@ -57,6 +57,14 @@ jobs:
           path: lord-of-mystery-gacha/gradle-output.log
           if-no-files-found: ignore
 
+      - name: Report build failure as issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create --title "Build failed: ${{ github.sha }}" --body "Gradle output tail:
+          $(tail -80 lord-of-mystery-gacha/gradle-output.log)" || true
+
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
