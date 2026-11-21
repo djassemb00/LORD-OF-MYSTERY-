@@ -522,7 +522,8 @@ class MainActivity : Activity() {
             box.addView(tv(if (result.victory) "🏆 انتصار!" else "💔 هزيمة", 20f, gold, true))
             val logView = tv(logText, 13f)
             logView.movementMethod = ScrollingMovementMethod()
-            logView.height = dp(300)
+            logView.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(300))
             box.addView(logView)
             box.addView(tv("المكافأة: ${result.coins} عملة | ${result.essence} جوهر | ${result.xp} خبرة", 14f, gold, true))
             AlertDialog.Builder(this).setView(box).setPositiveButton("إغلاق") { _, _ ->

@@ -44,7 +44,15 @@ jobs:
         working-directory: lord-of-mystery-gacha
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace > gradle-output.log 2>&1 || { tail -120 gradle-output.log; exit 1; }
+
+      - name: Upload Gradle log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: lord-of-mystery-gacha/gradle-output.log
+          if-no-files-found: ignore
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
