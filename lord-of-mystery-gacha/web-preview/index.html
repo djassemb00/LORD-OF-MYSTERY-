@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لورد الغامض: غاتشا — نسخة الويب</title>
+<style>
+  :root{--bg:#0d0a1f;--panel:#1b1533;--gold:#d4af37;--text:#f5f0e1;--dim:#b8b0d8;--red:#ff5252}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,Arial,sans-serif;padding-bottom:70px}
+  header{background:var(--panel);padding:10px 14px;display:flex;gap:14px;align-items:center;position:sticky;top:0;z-index:10;border-bottom:1px solid #2a2150}
+  header b{color:var(--gold);font-size:18px;flex:1}
+  header span{font-size:14px}
+  nav{position:fixed;bottom:0;left:0;right:0;background:var(--panel);display:flex;border-top:1px solid #2a2150;z-index:10}
+  nav button{flex:1;background:none;border:none;color:var(--dim);padding:12px 4px;font-size:13px;cursor:pointer}
+  nav button.active{background:var(--gold);color:#000;font-weight:bold}
+  main{max-width:760px;margin:0 auto;padding:14px}
+  .panel{background:var(--panel);border:1px solid #2a2150;border-radius:12px;padding:14px;margin-bottom:14px}
+  h1{color:var(--gold);font-size:20px;margin:6px 0}
+  h2{color:var(--gold);font-size:17px;margin:8px 0}
+  .dim{color:var(--dim);font-size:13px;line-height:1.7}
+  button.btn{background:var(--gold);color:#000;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:bold;cursor:pointer;width:100%;margin:5px 0}
+  button.btn:hover{filter:brightness(1.15)}
+  button.btn.alt{background:var(--panel);color:var(--text);border:1px solid #3a2d6b}
+  button.btn.danger{background:#b71c1c;color:#fff}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .card-row{display:flex;gap:10px;background:var(--panel);border-radius:10px;padding:10px;margin:6px 0;cursor:pointer;border-right:6px solid #999}
+  .card-row:hover{border-color:var(--gold)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cell{background:var(--panel);border-radius:10px;padding:10px;cursor:pointer}
+  .cell.locked{opacity:.55}
+  .choice{background:#241c45;color:var(--text);border:1px solid #3a2d6b;border-radius:10px;padding:12px;width:100%;text-align:right;cursor:pointer;margin:5px 0;font-size:15px}
+  .choice:hover{border-color:var(--gold)}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+  .modal.open{display:flex}
+  .modal-box{background:var(--panel);border-radius:14px;padding:18px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;border:1px solid var(--gold)}
+  .log{background:#120d28;border-radius:10px;padding:10px;font-size:13px;line-height:1.8;max-height:300px;overflow-y:auto;white-space:pre-wrap}
+  input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #3a2d6b;background:#120d28;color:var(--text);margin:5px 0}
+  .rar-common{border-right-color:#9e9e9e}.rar-rare{border-right-color:#42a5f5}.rar-epic{border-right-color:#ab47bc}.rar-legendary{border-right-color:#ffb300}.rar-mythic{border-right-color:#ff5252}
+  .stars{color:var(--gold)}
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--gold);color:#000;padding:10px 18px;border-radius:20px;font-weight:bold;z-index:30;display:none}
+</style>
+</head>
+<body>
+<header><b>🃏 لورد الغامض: غاتشا</b><span id="h-essence">💎 0</span><span id="h-coins">🪙 0</span><span id="h-level">⭐ Lv.1</span></header>
+<main id="app"></main>
+<nav>
+  <button data-s="gacha" class="active">🃏 استدعاء</button>
+  <button data-s="world">🗺️ العالم</button>
+  <button data-s="collection">📚 البطاقات</button>
+  <button data-s="battle">⚔️ المعركة</button>
+  <button data-s="settings">⚙️ الإعدادات</button>
+</nav>
+<div class="modal" id="modal"><div class="modal-box" id="modal-box"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ================= DATA =================
+const RARITIES={COMMON:{ar:'شائع',stars:1,color:'#9e9e9e'},RARE:{ar:'نادر',stars:2,color:'#42a5f5'},EPIC:{ar:'ملحمي',stars:3,color:'#ab47bc'},LEGENDARY:{ar:'أسطوري',stars:4,color:'#ffb300'},MYTHIC:{ar:'إلهي',stars:5,color:'#ff5252'}};
+const CARDS=[
+{id:'fool_0',n:'كلاين مورتي — الأحمق',p:'مسار الأحمق',s:0,r:'MYTHIC',a:980,d:920,h:5200,sp:300,sk:'مجلس الأحمق',sd:'يستدعي أعضاء نادي التاروت إلى قصر غامض فوق الضباب، ويمنح الفريق درعاً روحياً هائلاً.',sc:60,pow:220,e:'🤡',lore:'الإله الذي يجلس على عرش الضباب الرمادي، يراقب مصائر العالم من خلف حجاب الغموض.'},
+{id:'fool_9',n:'كلاين مورتي — الرائي',p:'مسار الأحمق',s:9,r:'COMMON',a:120,d:90,h:900,sp:60,sk:'تنبؤ',sd:'يكشف نقطة ضعف العدو ويزيد ضرر الفريق التالي.',sc:10,pow:130,e:'🔮',lore:'أول تسلسل في مسار الأحمق. يمنح صاحبه حدساً خارقاً وقدرة على رؤية خيوط المصير.'},
+{id:'fool_8',n:'كلاين مورتي — المهرج',p:'مسار الأحمق',s:8,r:'COMMON',a:160,d:110,h:1100,sp:70,sk:'خدعة المهرج',sd:'يخدع العدو فيخطئ هجومه، ويهاجم بضربة مراوغة سريعة.',sc:12,pow:140,e:'🎭',lore:'المهرج يخفي قوته الحقيقية خلف قناع السخرية.'},
+{id:'fool_7',n:'كلاين مورتي — الساحر',p:'مسار الأحمق',s:7,r:'RARE',a:260,d:180,h:1600,sp:100,sk:'عرض سحري',sd:'يختفي ويظهر خلف العدو بضربة قوية.',sc:18,pow:160,e:'🪄',lore:'الساحر يحوّل المعركة إلى مسرح.'},
+{id:'fool_6',n:'كلاين مورتي — محرك الدمى',p:'مسار الأحمق',s:6,r:'EPIC',a:380,d:260,h:2200,sp:140,sk:'خيوط الدمى',sd:'يسيطر على خيوط العدو فيضعفه ويقلل دفاعه.',sc:25,pow:150,e:'🧵',lore:'بخيوط غير مرئية يحرّك أعداءه كما يحرّك الدمى.'},
+{id:'fool_5',n:'كلاين مورتي — خادم الأسرار',p:'مسار الأحمق',s:5,r:'EPIC',a:520,d:360,h:2900,sp:180,sk:'باب الغموض',sd:'يفتح باباً إلى فضاء غامض يمتص هجوم العدو ويعيده مضاعفاً.',sc:35,pow:190,e:'🚪',lore:'خادم الأسرار يمشي بين العوالم.'},
+{id:'fool_4',n:'كلاين مورتي — عالم الغيب',p:'مسار الأحمق',s:4,r:'LEGENDARY',a:700,d:480,h:3600,sp:220,sk:'مخطوطة الغيب',sd:'يستدعي معرفة قديمة تدمر العدو وتشفي الفريق.',sc:45,pow:210,e:'📜',lore:'عالم الغيب يحمل مخطوطات من عصور سحيقة.'},
+{id:'audrey',n:'أودري هول — الرؤية',p:'مسار الرائي',s:5,r:'LEGENDARY',a:640,d:520,h:3400,sp:210,sk:'تأثير العقل',sd:'تغوص في عقل العدو وتسبب ضرراً روحياً وتشوشه.',sc:40,pow:200,e:'🧠',lore:'ابنة عائلة هول النبيلة، حاملة بطاقة العدل في نادي التاروت.'},
+{id:'alger',n:'ألجر ويلسون — العاصفة',p:'مسار الطاغية',s:6,r:'EPIC',a:560,d:340,h:2700,sp:160,sk:'غضب العاصفة',sd:'يستدعي عاصفة بحرية تضرب جميع الأعداء.',sc:32,pow:180,e:'⚡',lore:'قبطان سفينة غامضة في بحر السونيا.'},
+{id:'xio',n:'شيو ديريكا — عجلة الحظ',p:'مسار عجلة الحظ',s:7,r:'RARE',a:300,d:240,h:1800,sp:110,sk:'دوران الحظ',sd:'تدير عجلة الحظ: قد تضاعف الضرر أو تشفي الفريق.',sc:20,pow:170,e:'🎡',lore:'فتاة من عائلة نبيلة اختارت طريق العدالة.'},
+{id:'derrick',n:'ديريك بيرغ — الشمس',p:'مسار الشمس',s:7,r:'RARE',a:280,d:300,h:1900,sp:120,sk:'نور الشمس',sd:'يحرق الأرواح الشريرة بنور الشمس ويشفي حلفاءه.',sc:22,pow:165,e:'☀️',lore:'نجا من مدينة مدمرة في ظلام أبدي.'},
+{id:'emlyn',n:'إملين وايت — القمر',p:'مسار القمر',s:7,r:'RARE',a:270,d:220,h:1700,sp:130,sk:'دم القمر',sd:'يستدعي قوة القمر الحمراء لامتصاص الدم وشفاء نفسه.',sc:20,pow:155,e:'🌕',lore:'مصاص دماء من عائلة نبيلة.'},
+{id:'fors',n:'فورس وول — الباب',p:'مسار الباب',s:6,r:'EPIC',a:460,d:380,h:2400,sp:170,sk:'باب الفضاء',sd:'تفتح باباً يبتلع هجوم العدو ويعيد توجيهه.',sc:30,pow:175,e:'🌀',lore:'كاتبة روايات تعيش بين العوالم.'},
+{id:'cattleya',n:'كاتليا — الناسك',p:'مسار الناسك',s:4,r:'LEGENDARY',a:660,d:500,h:3300,sp:200,sk:'معرفة الناسك',sd:'تستدعي معرفة محرّمة تدمر العدو.',sc:42,pow:205,e:'📖',lore:'قبطانة سفينة غامضة تبحث عن أسرار العالم.'},
+{id:'leonard',n:'ليونارد ميتشل — بلا نوم',p:'مسار الظلام',s:7,r:'RARE',a:320,d:260,h:1800,sp:120,sk:'أغنية النوم',sd:'يغني أغنية تهدئ العدو وتضعفه.',sc:22,pow:160,e:'🌙',lore:'محقق في كنيسة الليل الأبدي.'},
+{id:'daly',n:'دالي سيمون — الليل',p:'مسار الظلام',s:6,r:'EPIC',a:480,d:400,h:2500,sp:160,sk:'سيطرة الليل',sd:'يغمر المعركة بظلام يضعف العدو ويقوي الفريق.',sc:30,pow:180,e:'🦇',lore:'قبطان فريق الليل.'},
+{id:'dunn',n:'دون سميث — الحارس',p:'مسار الظلام',s:7,r:'RARE',a:260,d:380,h:2100,sp:110,sk:'حارس الليل',sd:'يقف كدرع أمام الفريق ويصد كل الهجمات.',sc:18,pow:150,e:'🛡️',lore:'قبطان فريق الليل في تينجن.'},
+{id:'sharon',n:'شارون — الموت',p:'مسار الموت',s:6,r:'EPIC',a:500,d:300,h:2300,sp:150,sk:'لمسة الموت',sd:'لمسة واحدة تسبب ضرراً قاتلاً وتسرق روحانية العدو.',sc:28,pow:185,e:'💀',lore:'امرأة غامضة تخدم الموت.'},
+{id:'azik',n:'أزيك إيغرز — الموت',p:'مسار الموت',s:5,r:'LEGENDARY',a:620,d:440,h:3100,sp:190,sk:'حكم الموت',sd:'يحكم على العدو بالموت ويسبب ضرراً هائلاً.',sc:40,pow:200,e:'⚰️',lore:'معلم في مدرسة، لكنه خالد عاش آلاف السنين.'},
+{id:'melissa',n:'ميليسا مورتي — الحديد',p:'مسار الحديد',s:8,r:'COMMON',a:150,d:160,h:1200,sp:70,sk:'قبضة الحديد',sd:'ضربة قوية بيد ميكانيكية لا ترحم.',sc:12,pow:140,e:'⚙️',lore:'أخت كلاين الكبرى، تعمل في مصنع.'},
+{id:'benson',n:'بنسون مورتي — المحاسب',p:'مسار المحاسب',s:9,r:'COMMON',a:110,d:130,h:1000,sp:60,sk:'حساب دقيق',sd:'يحسب كل شيء بدقة ويزيد دفاع الفريق.',sc:10,pow:125,e:'🧮',lore:'أخ كلاين الأكبر، ذكي ويعرف قيمة كل شيء.'},
+{id:'roselle',n:'روزيل غوستاف — الإمبراطور',p:'مسار المعرفة',s:4,r:'LEGENDARY',a:680,d:460,h:3500,sp:210,sk:'اختراع الإمبراطور',sd:'يستدعي آلة حربية تدمر العدو.',sc:44,pow:210,e:'👑',lore:'الإمبراطور الذي غيّر العالم باختراعاته.'},
+{id:'adam',n:'آدم — الرائي الأصلي',p:'مسار الرائي',s:1,r:'MYTHIC',a:900,d:800,h:4800,sp:280,sk:'الوعي الكوني',sd:'يتحكم في وعي العدو بالكامل.',sc:58,pow:225,e:'👁️',lore:'الابن الأول للإله الأصلي.'},
+{id:'amon',n:'أمون — الباب الأصلي',p:'مسار الباب',s:1,r:'MYTHIC',a:880,d:760,h:4600,sp:270,sk:'سرقة المصير',sd:'يسرق قدرة العدو ويستخدمها ضده.',sc:56,pow:220,e:'🐛',lore:'الملك الأصلي للملائكة.'},
+{id:'medici',n:'ميديشي — الكاهن الأحمر',p:'مسار الحرب',s:2,r:'MYTHIC',a:860,d:700,h:4400,sp:260,sk:'غضب الحرب',sd:'يستدعي جيشاً من الأرواح المحاربة.',sc:54,pow:215,e:'🔥',lore:'ملك الملائكة الأقدم.'},
+{id:'will',n:'ويل أوسيبت — الأفعى',p:'مسار عجلة الحظ',s:3,r:'LEGENDARY',a:700,d:560,h:3600,sp:220,sk:'عجلة الأفعى',sd:'يدير عجلة الحظ الكونية ويغيّر مصير المعركة.',sc:46,pow:205,e:'🐍',lore:'أفعى ميركوري، كائن خالد.'},
+{id:'pallez',n:'بالليز زورواست — الباب',p:'مسار الباب',s:5,r:'EPIC',a:540,d:420,h:2600,sp:170,sk:'باب زورواست',sd:'يفتح باباً إلى الماضي ويستدعي قوة قديمة.',sc:34,pow:190,e:'📜',lore:'ملاك قديم عاش في عصر الأساطير.'},
+{id:'zangwill',n:'زانغويل — الرائي',p:'مسار الأحمق',s:7,r:'RARE',a:280,d:200,h:1700,sp:110,sk:'رؤية زانغويل',sd:'يرى خيوط المصير ويضرب نقطة الضعف.',sc:20,pow:165,e:'🔭',lore:'رجل غامض يبحث عن الحقيقة.'},
+{id:'antigonus',n:'أنتيغونوس — الأحمق الأصلي',p:'مسار الأحمق',s:1,r:'MYTHIC',a:920,d:840,h:5000,sp:290,sk:'ضباب أنتيغونوس',sd:'يبتلع العالم في ضباب رمادي ويعيد تشكيله.',sc:60,pow:230,e:'🌫️',lore:'الأحمق الأصلي الذي سبق كل شيء.'},
+{id:'evil_spirit',n:'روح شريرة',p:'كائن غامض',s:8,r:'COMMON',a:140,d:80,h:1000,sp:50,sk:'همس شرير',sd:'يهمس في عقل العدو ويسبب ضرراً روحياً.',sc:10,pow:135,e:'👻',lore:'كائن وُلد من الخوف والظلام.'},
+{id:'mutant',n:'متحول',p:'كائن غامض',s:7,r:'RARE',a:250,d:200,h:1500,sp:90,sk:'تحول وحشي',sd:'يتحول إلى وحش ويهاجم بعنف.',sc:16,pow:155,e:'🧟',lore:'متحول فقد عقله بسبب جرعة خاطئة.'},
+{id:'mirror',n:'كائن المرآة',p:'كائن غامض',s:6,r:'EPIC',a:420,d:360,h:2200,sp:140,sk:'انعكاس المرآة',sd:'يعكس هجوم العدو عليه مضاعفاً.',sc:26,pow:175,e:'🪞',lore:'يعيش داخل المرايا.'},
+{id:'dragon',n:'تنين صغير',p:'كائن غامض',s:5,r:'LEGENDARY',a:600,d:500,h:3200,sp:190,sk:'نار التنين',sd:'ينفث ناراً تدمر كل شيء.',sc:38,pow:195,e:'🐉',lore:'تنين صغير لكن ناره كافية لحرق مدينة.'},
+{id:'angel',n:'ملاك',p:'ملاك',s:2,r:'MYTHIC',a:840,d:720,h:4200,sp:250,sk:'حكم الملاك',sd:'يُنزل حكماً إلهياً لا يقبل الاستئناف.',sc:52,pow:220,e:'👼',lore:'ملاك نزل من السماء.'},
+{id:'king_angels',n:'ملك الملائكة',p:'ملاك',s:1,r:'MYTHIC',a:940,d:860,h:4900,sp:285,sk:'عرش الملائكة',sd:'يستدعي عرشاً من النور يدمر العدو.',sc:58,pow:228,e:'✨',lore:'ملك الملائكة، أقرب الكائنات إلى الإله.'}
+];
+const LOCATIONS=[
+{id:'tingen',n:'تينجن',d:'مدينة صغيرة على ضفاف نهر تاروت. هنا بدأت قصة كلاين مورتي.',danger:3,conn:['backlund','savo','queens'],e:'🏙️'},
+{id:'backlund',n:'باكلند',d:'عاصمة الإمبراطورية، مدينة لا تنام.',danger:5,conn:['tingen','savo','queens','bayam'],e:'🏰'},
+{id:'savo',n:'جزيرة سافو',d:'جزيرة استوائية في بحر سونيا. كنوز مدفونة منذ قرون.',danger:4,conn:['tingen','backlund','bayam'],e:'🏝️'},
+{id:'queens',n:'حي كوينز',d:'حي راقٍ يسكنه النبلاء والأثرياء.',danger:4,conn:['tingen','backlund'],e:'🏛️'},
+{id:'bayam',n:'بايام',d:'مدينة ميناء على الساحل. تجار يبيعون كل شيء.',danger:6,conn:['backlund','savo','sonia'],e:'⚓'},
+{id:'sonia',n:'بحر سونيا',d:'بحر غامض مليء بالوحوش والكنوز.',danger:8,conn:['bayam','savo'],e:'🌊'},
+{id:'forsaken',n:'أرض منسية',d:'أرض مدمرة يغمرها الظلام الأبدي.',danger:9,conn:['sonia','backlund'],e:'🌑'},
+{id:'ruins',n:'أطلال القدماء',d:'أطلال حضارة سحيقة وكنوز محرّمة.',danger:7,conn:['forsaken','queens','savo'],e:'🏺'},
+{id:'tarot',n:'قصر التاروت',d:'قصر غامض فوق الضباب الرمادي.',danger:2,conn:['tingen','backlund','queens'],e:'🃏'},
+{id:'church',n:'كنيسة الليل',d:'كنيسة عريقة تخدم إله الليل الأبدي.',danger:3,conn:['tingen','backlund'],e:'⛪'}
+];
+const ENCOUNTERS=[
+{loc:'tingen',t:'رجل في الظلام',x:'رأيت رجلاً يرتدي قبعة سوداء يقف في زقاق مظلم. عيناه تلمعان في الظلام.',c:[{t:'اقترب منه واسأله',r:'أخبرك الرجل أنه عضو في فريق الليل ويحرس المدينة. منحك شارة مؤقتة.',repN:10,ess:50},{t:'تجاهله وامضِ',r:'مشيت بعيداً. لكنك شعرت بنظراته تلاحقك.',san:-5},{t:'راقبه من بعيد',r:'اكتشفت أنه يلتقي بمجموعة سرية في مستودع مهجور.',spi:20,repT:5}]},
+{loc:'tingen',t:'الروح الشريرة',x:'سمعت صوتاً يهمس باسمك في غرفتك. روح شريرة تطفو فوق سريرك.',c:[{t:'قاتل الروح فوراً',r:'دارت معركة شرسة. تمكنت من طرد الروح.',battle:true,spi:-20,ess:80},{t:'تحدث معها بهدوء',r:'اكتشفت أن الروح كانت ضحية طقس محرّم. ساعدتها على الرحيل.',san:10,repC:5},{t:'اهرب من الغرفة',r:'هربت إلى الشارع. لم تنم تلك الليلة أبداً.',san:-10}]},
+{loc:'backlund',t:'النبيلة الغامضة',x:'في حفل راقٍ، اقتربت منك نبيلة شابة وقالت إنها تعرف سراً عن عائلتك.',c:[{t:'استمع إلى سرها',r:'أخبرتك عن خريطة كنز مدفون في جزيرة سافو.',coins:100,repT:5},{t:'ارفض وابتعد',r:'ضحكت النبيلة وقالت: ستندم على هذا.',san:-5},{t:'اسألها عن ثمن السر',r:'طلبت 200 عملة. دفعت لها وحصلت على الخريطة.',coins:-200,ess:100}]},
+{loc:'backlund',t:'كنيسة العاصفة',x:'جنود كنيسة إله العاصفة يفتشون كل من يمر.',c:[{t:'تعاون معهم',r:'ساعدتهم في التفتيش واكتسبت ثقتهم.',repS:15,coins:80},{t:'تجنبهم واختبئ',r:'اختبأت في زقاق. سمعتهم يتحدثون عن مؤامرة.',repN:5,spi:15},{t:'اشترِ صمتهم بالمال',r:'دفعت لهم 50 عملة ليتركوك وشأنك.',coins:-50,repA:5}]},
+{loc:'savo',t:'الكنز المدفون',x:'وجدت خريطة قديمة تقود إلى كهف في الجزيرة. صندوق خشبي قديم يلمع.',c:[{t:'افتح الصندوق',r:'وجدت مجوهرات قديمة وجرعة روحانية نادرة!',coins:250,ess:60},{t:'افحص الفخاخ أولاً',r:'اكتشفت فخاً سحرياً وتجاوزته بأمان. وجدت كنزاً أكبر.',coins:350,spi:-10},{t:'اترك الكنز وغادر',r:'الكنز ليس لك. غادرت وأنت تشعر بالندم.',san:-5}]},
+{loc:'savo',t:'القرصان العجوز',x:'قرصان عجوز يجلس تحت نخلة. يعرف مكان سفينة غارقة مليئة بالكنوز.',c:[{t:'اشترِ منه المعلومات',r:'أخبرك بمكان السفينة مقابل 100 عملة.',coins:-100,ess:120},{t:'استمع إلى قصصه',r:'حكى لك قصصاً عن بحر سونيا وعن وحوشه.',spi:30,repT:5},{t:'سرق الخريطة من جيبه',r:'سرقت الخريطة لكن القرصان استيقظ. هربت بصعوبة.',coins:50,san:-10,repA:5}]},
+{loc:'queens',t:'المؤامرة النبيلة',x:'سمعت حديثاً خطيراً: مجموعة من النبلاء تخطط لاغتيال شخصية مهمة.',c:[{t:'أخبر الكنيسة فوراً',r:'أحبطت المؤامرة وحصلت على مكافأة سخية.',repC:15,coins:150,repA:-5},{t:'ابتز المؤامرين',r:'هددتهم بكشف المؤامرة مقابل مال. دفعوا بسخاء.',coins:200,repA:10},{t:'تجاهل الأمر',r:'لم يكن شأنك. لكن الاغتيال نجح لاحقاً.',san:-10}]},
+{loc:'bayam',t:'التاجر الغامض',x:'تاجر يبيع جرعات غريبة. جرعته تستطيع رفع تسلسلك فوراً.',c:[{t:'اشترِ الجرعة',r:'شربت الجرعة وشعرت بقوة جديدة تسري في جسدك!',ess:150,spi:-15},{t:'اشترِ جرعة أرخص',r:'الجرعة الرخيصة لم تعمل جيداً.',ess:40,coins:-50},{t:'اسأله عن مصدر الجرعات',r:'أخبرك أنها من أطلال القدماء.',spi:25,repT:5}]},
+{loc:'sonia',t:'وحش البحر',x:'ظهر وحش عملاق من أعماق البحر! عيناه بحجم قارب.',c:[{t:'قاتل الوحش',r:'معركة ملحمية! تمكنت من قتله وحصلت على كنزه.',battle:true,coins:300,ess:100,san:-15},{t:'اهرب بأقصى سرعة',r:'هربت السفينة بأعجوبة. لكنك فقدت بعض البضاعة.',coins:-100,san:-10},{t:'حاول التفاوض مع الوحش',r:'الوحش لا يفهم اللغة. لكنه يحمي كنزاً في الأعماق.',spi:20,ess:80}]},
+{loc:'forsaken',t:'الناجي الأخير',x:'وجدت رجلاً عجوزاً يعيش وحيداً. المدينة كلها ماتت في ليلة واحدة قبل 100 سنة.',c:[{t:'استمع إلى قصته',r:'حكى لك عن الكارثة التي دمرت المدينة.',san:15,spi:20},{t:'اسأله عن الكنوز',r:'أخبرك بمكان مخزن تحت الأرض مليء بالكنوز.',coins:200,ess:50},{t:'اتركه وغادر',r:'الرجل العجوز لوّح لك وهو يختفي في الظلام.',san:-10}]},
+{loc:'ruins',t:'النقوش المحرّمة',x:'وجدت جداراً مغطى بنقوش غريبة. النقوش تنظر إليك أيضاً.',c:[{t:'اقرأ النقوش',r:'قرأت النقوش واكتسبت معرفة محرّمة. لكنها أثّرت على عقلك.',spi:50,san:-20},{t:'انسخ النقوش وغادر',r:'نسخت النقوش على ورقة. يمكنك بيعها لاحقاً.',coins:150,spi:10},{t:'دمّر النقوش',r:'حطمت الجدار. شعرت براحة غريبة.',san:10,repC:5}]},
+{loc:'tarot',t:'اجتماع التاروت',x:'حان وقت اجتماع نادي التاروت في قصر الضباب الرمادي.',c:[{t:'شارك معلوماتك',r:'شاركت ما تعلمته. الأعضاء كافأوك بمعلومات وكنوز.',ess:100,repT:15,coins:100},{t:'استمع فقط',r:'استمعت إلى أسرار الأعضاء وتعلمت الكثير.',spi:30,repT:10},{t:'اطلب مهمة خاصة',r:'منحك الأحمق مهمة سرية. مكافأتها ستكون عظيمة.',ess:150,repT:10,flag:'tarot_quest'}]},
+{loc:'church',t:'الكاهن العجوز',x:'كاهن عجوز طلب منك المساعدة في طرد روح شريرة من القبو.',c:[{t:'ساعد الكاهن',r:'طردت الروح الشريرة مع الكاهن. شكرك ومنحك بركة الكنيسة.',repC:15,san:10,ess:50},{t:'ارفض المساعدة',r:'الكاهن نظر إليك بحزن وقال: الظلام ينتظر الجميع.',san:-5},{t:'اطلب مقابلاً',r:'طلبت 100 عملة مقابل مساعدتك.',coins:100,repC:-5}]},
+{loc:'bayam',t:'السفينة الغارقة',x:'وجدت سفينة غارقة في أعماق البحر. داخلها يلمع شيء ذهبي.',c:[{t:'ادخل السفينة',r:'وجدت صندوقاً ذهبياً مليئاً بالكنوز!',coins:400,san:-10},{t:'افحص السفينة من الخارج',r:'اكتشفت أن السفينة محمية بلعنة. غادرت قبل أن تصيبك.',spi:20},{t:'ادخل وخذ كل شيء بسرعة',r:'أخذت كل ما استطعت وهربت.',coins:250,san:-15}]},
+{loc:'forsaken',t:'الظلام الأبدي',x:'الظلام هنا ليس عادياً. إنه حي، ويهمس بأسماء الموتى.',c:[{t:'تقدم في الظلام',r:'تقدمت ووجدت بوابة قديمة. خلفها نور خافت.',spi:30,ess:80},{t:'تراجع فوراً',r:'تراجعت قبل أن يبتلعك الظلام.',san:-5},{t:'أشعل نور الشمس',r:'نور الشمس أضاء الظلام مؤقتاً. رأيت طريقاً للخروج.',san:10,spi:15}]}
+];
+
+// ================= SAVE =================
+let S=JSON.parse(localStorage.getItem('lotm_save')||'null')||{essence:3000,coins:500,pity:0,sanity:100,spirituality:100,location:'tingen',level:1,xp:0,cards:{},repN:0,repS:0,repT:0,repA:0,repC:0,flags:[],aiProvider:'pollinations',aiModel:'',aiKey:'',lastDaily:0};
+function save(){localStorage.setItem('lotm_save',JSON.stringify(S))}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
+function header(){document.getElementById('h-essence').textContent='💎 '+S.essence;document.getElementById('h-coins').textContent='🪙 '+S.coins;document.getElementById('h-level').textContent='⭐ Lv.'+S.level}
+function modal(html){document.getElementById('modal-box').innerHTML=html;document.getElementById('modal').classList.add('open')}
+function closeModal(){document.getElementById('modal').classList.remove('open')}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+
+// ================= AI (Pollinations free + local fallback) =================
+const LOCAL_LINES=['الضباب الرمادي يتحرك حولك كأن العالم نفسه يراقبك. تشعر أن كل خطوة تخطوها تغيّر شيئاً في هذا العالم الغامض.','في مكان ما بعيد، يبتسم الأحمق خلف حجاب الغموض. مصيرك يتشكل الآن، وكل اختيار تفعله يترك أثراً.','الرياح تحمل همسات من الماضي. تسمع صوتاً يقول إن الطريق أمامك طويل، لكن من يملك الشجاعة يصل إلى النهاية.','تشعر بقوة روحانية تسري في جسدك. العالم من حولك يتغير ببطء، وكل شيء يبدو ممكناً الآن.','من بعيد، ترى نوراً خافتاً. إنه نور الأمل في عالم مليء بالظلام والأسرار.'];
+function localNarrate(p){return LOCAL_LINES[Math.abs(p.split('').reduce((a,c)=>a+c.charCodeAt(0),0))%LOCAL_LINES.length]}
+async function aiNarrate(prompt){
+  if(S.aiProvider==='local')return{text:localNarrate(prompt),fromAi:false};
+  try{
+    if(S.aiProvider==='pollinations'){
+      const full=encodeURIComponent('أنت راوي لعبة مستوحاة من رواية لورد الغامض. اكتب بالعربية بأسلوب غامض ومشوق (3-5 جمل). '+prompt);
+      const r=await fetch('https://text.pollinations.ai/'+full);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      return{text:(await r.text()).trim(),fromAi:true};
+    }
+    if(S.aiProvider==='openrouter'||S.aiProvider==='groq'){
+      const url=S.aiProvider==='openrouter'?'https://openrouter.ai/api/v1/chat/completions':'https://api.groq.com/openai/v1/chat/completions';
+      const model=S.aiModel||(S.aiProvider==='openrouter'?'meta-llama/llama-3.3-70b-instruct:free':'llama-3.3-70b-versatile');
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.aiKey},body:JSON.stringify({model,messages:[{role:'system',content:'أنت راوي لعبة مستوحاة من رواية لورد الغامض. اكتب بالعربية بأسلوب غامض ومشوق.'},{role:'user',content:prompt}],max_tokens:400})});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const j=await r.json();return{text:j.choices[0].message.content.trim(),fromAi:true};
+    }
+    if(S.aiProvider==='gemini'){
+      const model=S.aiModel||'gemini-2.0-flash';
+      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${S.aiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const j=await r.json();return{text:j.candidates[0].content.parts[0].text.trim(),fromAi:true};
+    }
+  }catch(e){}
+  return{text:localNarrate(prompt),fromAi:false};
+}
+
+// ================= GACHA =================
+function rollOne(){
+  const pity=S.pity;let r;
+  if(pity+1>=90)r='MYTHIC';
+  else{let m=3;if(pity>=70)m+=(pity-70+1)*3;const roll=Math.random()*100;
+    r=roll<m?'MYTHIC':roll<m+12?'LEGENDARY':roll<m+37?'EPIC':roll<m+72?'RARE':'COMMON';}
+  const pool=CARDS.filter(c=>c.r===r);return pool[Math.floor(Math.random()*pool.length)];
+}
+function doPull(n){
+  const cost=n===1?160:1600;
+  if(S.essence<cost){toast('جوهر غامض غير كافٍ! العب في العالم أو انتظر المكافأة اليومية.');return}
+  S.essence-=cost;const out=[];
+  for(let i=0;i<n;i++){const c=rollOne();out.push(c);S.cards[c.id]=(S.cards[c.id]||0)+1;S.pity=c.r==='MYTHIC'?0:S.pity+1;}
+  save();header();renderGacha(out);
+  toast('حصلت على '+out.length+' بطاقة!');
+}
+function renderGacha(pulled){
+  const app=document.getElementById('app');
+  let h=`<div class="panel"><h1>✨ بوابة الضباب الرمادي ✨</h1><p class="dim">استدعِ شخصيات وكائنات من عالم لورد الغامض. كل استدعاء قد يغيّر مصيرك.</p><p class="dim">نسب الأسطوري: 12% | الملحمي: 25% | النادر: 35% | الشائع: 25% | الإلهي: 3% (+3% بعد 70 سحبة، مضمون عند 90)</p></div>`;
+  h+=`<p style="color:var(--gold);font-weight:bold">سحبات حتى الإلهي المضمون: ${90-S.pity}</p>`;
+  h+=`<div class="row"><button class="btn" onclick="doPull(1)">سحبة واحدة<br>💎 160</button><button class="btn" onclick="doPull(10)">10 سحبات<br>💎 1600</button></div>`;
+  if(Date.now()-S.lastDaily>=20*3600*1000)h+=`<button class="btn alt" onclick="claimDaily()">🎁 مكافأة يومية: 300 جوهر + 100 عملة</button>`;
+  if(pulled)h+=`<h2>— نتائج الاستدعاء —</h2>`+pulled.map(c=>cardRow(c)).join('');
+  app.innerHTML=h;
+}
+function cardRow(c){const R=RARITIES[c.r];return `<div class="card-row rar-${c.r.toLowerCase()}" onclick="showCard('${c.id}')"><div style="flex:1"><b>${c.e} ${c.n}</b><br><span class="dim">${c.p} | تسلسل ${c.s} | ${R.ar} ${'★'.repeat(R.stars)}</span><br><span class="dim">هجوم ${c.a} | دفاع ${c.d} | صحة ${c.h}</span></div></div>`}
+function claimDaily(){S.lastDaily=Date.now();S.essence+=300;S.coins+=100;save();header();toast('حصلت على المكافأة اليومية!');renderGacha()}
+function showCard(id){
+  const c=CARDS.find(x=>x.id===id);const R=RARITIES[c.r];
+  modal(`<h1>${c.e} ${c.n}</h1><p class="dim">${c.p} | تسلسل ${c.s} | <span style="color:${R.color}">${R.ar} ${'★'.repeat(R.stars)}</span></p><p>⚔️ هجوم: ${c.a} &nbsp; 🛡️ دفاع: ${c.d} &nbsp; ❤️ صحة: ${c.h} &nbsp; 🔮 روحانية: ${c.sp}</p><p style="color:var(--gold)"><b>✨ مهارة: ${c.sk} (تكلفة ${c.sc})</b></p><p class="dim">${c.sd}</p><p class="dim">📖 ${c.lore}</p><p id="ai-out" class="dim"></p><button class="btn" onclick="cardAi('${c.id}')">🤖 توليد قصة بالذكاء الاصطناعي</button><button class="btn alt" onclick="closeModal()">إغلاق</button>`);
+}
+async function cardAi(id){
+  const c=CARDS.find(x=>x.id===id);const out=document.getElementById('ai-out');out.textContent='⏳ جاري التفكير...';
+  const r=await aiNarrate(`اكتب قصة قصيرة (3 جمل) عن ${c.n} من ${c.p}، تسلسل ${c.s}.`);
+  out.textContent=(r.fromAi?'🤖 ':'📝 ')+r.text;
+}
+
+// ================= WORLD =================
+function loc(){return LOCATIONS.find(l=>l.id===S.location)}
+function worldSummary(){const l=loc();return `المكان: ${l.n} | المستوى: ${S.level} | العقل: ${S.sanity} | الروحانية: ${S.spirituality} | سمعة فريق الليل: ${S.repN} | سمعة كنيسة العاصفة: ${S.repS} | سمعة نادي التاروت: ${S.repT} | سمعة جماعة الفجر: ${S.repA} | سمعة الكنيسة: ${S.repC} | أعلام العالم: ${S.flags.join(',')}`}
+function renderWorld(){
+  const l=loc();
+  let h=`<div class="panel"><h1>${l.e} أنت الآن في: ${l.n}</h1><p class="dim">${l.d}</p></div>`;
+  h+=`<div class="panel"><p>🧠 العقل: ${S.sanity} | 🔮 الروحانية: ${S.spirituality}</p><p class="dim">🌙 فريق الليل: ${S.repN} | ⛈️ كنيسة العاصفة: ${S.repS}<br>🃏 نادي التاروت: ${S.repT} | 🌅 جماعة الفجر: ${S.repA} | ⛪ الكنيسة: ${S.repC}</p>${S.flags.length?`<p style="color:var(--gold)">🚩 أحداث العالم: ${S.flags.join(', ')}</p>`:''}</div>`;
+  h+=`<h2>🧭 السفر إلى:</h2>`+l.conn.map(id=>{const d=LOCATIONS.find(x=>x.id===id);return `<button class="btn alt" onclick="travel('${id}')">${d.e} ${d.n} (خطر ${d.danger}/10)</button>`}).join('');
+  h+=`<button class="btn" onclick="showEncounter()">🔍 استكشف المنطقة (لقاء عشوائي)</button>`;
+  h+=`<div class="panel"><p id="ai-world" class="dim">🤖 الراوي الذكي: اضغط الزر لوصف ما يحدث حولك الآن.</p><button class="btn" onclick="worldAi()">🤖 اسأل الراوي الذكي</button></div>`;
+  h+=`<div class="row"><button class="btn alt" onclick="rest()">😴 راحة (20 عملة)</button><button class="btn alt" onclick="work()">💼 عمل (60 عملة)</button></div>`;
+  document.getElementById('app').innerHTML=h;
+}
+function travel(id){S.location=id;S.spirituality=Math.max(0,S.spirituality-5);S.sanity=Math.max(0,S.sanity-2);save();header();toast('سافرت إلى '+loc().n);renderWorld()}
+function rest(){if(S.coins<20){toast('عملات غير كافية');return}S.coins-=20;S.spirituality=100;S.sanity=Math.min(100,S.sanity+20);save();header();toast('استرحت واستعدت روحانيتك.');renderWorld()}
+function work(){S.coins+=60;S.spirituality=Math.max(0,S.spirituality-15);S.sanity=Math.max(0,S.sanity-5);save();header();toast('عملت وكسبت 60 عملة.');renderWorld()}
+async function worldAi(){const out=document.getElementById('ai-world');out.textContent='⏳ جاري الاتصال بالذكاء الاصطناعي...';const r=await aiNarrate(`صف مشهداً غامضاً يحدث الآن في ${loc().n}. ${worldSummary()}`);out.textContent=(r.fromAi?'🤖 ':'📝 ')+r.text}
+function showEncounter(){
+  const pool=ENCOUNTERS.filter(e=>e.loc===S.location);
+  if(!pool.length){toast('لا توجد لقاءات هنا الآن. جرّب مكاناً آخر.');return}
+  const enc=pool[Math.floor(Math.random()*pool.length)];
+  modal(`<h1>⚡ ${enc.t}</h1><p>${enc.x}</p>`+enc.c.map((c,i)=>`<button class="choice" onclick="applyChoice(${ENCOUNTERS.indexOf(enc)},${i})">${i+1}. ${c.t}</button>`).join(''));
+}
+async function applyChoice(ei,ci){
+  const enc=ENCOUNTERS[ei],c=enc.c[ci];
+  if(c.battle){closeModal();switchScreen('battle');toast('اختر فريقك ثم ابدأ المعركة!');return}
+  S.sanity=Math.max(0,Math.min(100,S.sanity+(c.san||0)));S.spirituality=Math.max(0,Math.min(100,S.spirituality+(c.spi||0)));
+  S.coins+=c.coins||0;S.essence+=c.ess||0;S.repN+=c.repN||0;S.repS+=c.repS||0;S.repT+=c.repT||0;S.repA+=c.repA||0;S.repC+=c.repC||0;
+  if(c.flag&&!S.flags.includes(c.flag))S.flags.push(c.flag);
+  save();header();
+  modal(`<h1>📜 النتيجة</h1><p>${c.r}</p><p id="ai-out" class="dim">⏳ جاري تعليق الراوي...</p><button class="btn" onclick="closeModal();renderWorld()">متابعة</button>`);
+  const r=await aiNarrate(`علق على هذا الاختيار: ${c.t}. النتيجة: ${c.r}. ${worldSummary()}`);
+  const out=document.getElementById('ai-out');if(out)out.textContent=(r.fromAi?'🤖 ':'📝 ')+r.text;
+}
+
+// ================= COLLECTION =================
+let filter=null;
+function renderCollection(){
+  const owned=Object.keys(S.cards).length;
+  let h=`<h1>📚 مجموعتك: ${owned} / ${CARDS.length} بطاقة</h1>`;
+  h+=`<div class="row">`+['الكل','COMMON','RARE','EPIC','LEGENDARY','MYTHIC'].map(f=>`<button class="btn alt" style="font-size:12px;padding:8px" onclick="setFilter('${f}')">${f==='الكل'?'الكل':RARITIES[f].ar}</button>`).join('')+`</div>`;
+  const list=filter?CARDS.filter(c=>c.r===filter):CARDS;
+  h+=`<div class="grid">`+list.map(c=>{const n=S.cards[c.id]||0;const R=RARITIES[c.r];
+    return `<div class="cell ${n?'':'locked'}" ${n?`onclick="showCard('${c.id}')"` :''}><b>${n?c.e+' '+c.n:'❓ بطاقة مجهولة'}</b><br><span class="dim">${c.p} | تسلسل ${c.s}</span><br><span style="color:${R.color}">${R.ar} ${'★'.repeat(R.stars)}</span>${n?`<br><span class="dim">×${n} | هجوم ${c.a}</span>`:''}</div>`}).join('')+`</div>`;
+  document.getElementById('app').innerHTML=h;
+}
+function setFilter(f){filter=f==='الكل'?null:f;renderCollection()}
+
+// ================= BATTLE =================
+let team=[];
+function renderBattle(){
+  const owned=Object.keys(S.cards).map(id=>CARDS.find(c=>c.id===id)).filter(Boolean);
+  let h=`<h1>⚔️ اختر فريقك (حتى 3 بطاقات): ${team.length}/3</h1>`;
+  if(!owned.length){h+=`<p class="dim">لا تملك أي بطاقة بعد! اذهب إلى الاستدعاء أولاً.</p>`}
+  h+=owned.map(c=>`<button class="btn ${team.includes(c.id)?'':'alt'}" onclick="toggleTeam('${c.id}')">${team.includes(c.id)?'✅':'⬜'} ${c.e} ${c.n} (${RARITIES[c.r].ar})</button>`).join('');
+  h+=`<button class="btn" onclick="fight()">🔥 ابدأ المعركة في ${loc().n} (خطر ${loc().danger}/10)</button>`;
+  document.getElementById('app').innerHTML=h;
+}
+function toggleTeam(id){if(team.includes(id))team=team.filter(x=>x!==id);else if(team.length<3)team.push(id);else{toast('الفريق ممتلئ (3 كحد أقصى)');return}renderBattle()}
+function genEnemies(danger){const count=Math.max(2,Math.min(4,2+Math.floor(danger/3)));const maxIdx=Math.floor(danger/3);const pool=CARDS.filter(c=>['COMMON','RARE','EPIC','LEGENDARY'].indexOf(c.r)<=maxIdx);const out=[];for(let i=0;i<count;i++)out.push(pool[Math.floor(Math.random()*pool.length)]);return out}
+function fight(){
+  if(!team.length){toast('اختر بطاقة واحدة على الأقل');return}
+  const players=team.map(id=>{const c=CARDS.find(x=>x.id===id);return{card:c,hp:c.h,sp:c.sp}});
+  const foes=genEnemies(loc().danger).map(c=>({card:c,hp:c.h,sp:c.sp}));
+  const log=['⚔️ بدأت المعركة!'];
+  let round=0;
+  while(players.some(p=>p.hp>0)&&foes.some(f=>f.hp>0)&&round<30){
+    round++;log.push(`— الجولة ${round} —`);
+    for(const p of players.filter(p=>p.hp>0)){
+      const t=foes.filter(f=>f.hp>0);if(!t.length)break;const target=t[Math.floor(Math.random()*t.length)];
+      if(p.sp>=p.card.sc&&Math.random()<0.6){p.sp-=p.card.sc;const dmg=Math.max(10,Math.floor(p.card.a*p.card.pow/100)-Math.floor(target.card.d/2));target.hp-=dmg;log.push(`${p.card.e} ${p.card.n} استخدم «${p.card.sk}» على ${target.card.n} بقوة ${dmg}!`)}
+      else{const dmg=Math.max(5,p.card.a-Math.floor(target.card.d/2));target.hp-=dmg;log.push(`${p.card.e} ${p.card.n} هاجم ${target.card.n} بقوة ${dmg}.`)}
+      if(target.hp<=0)log.push(`💀 ${target.card.n} سقط!`);
+    }
+    if(!foes.some(f=>f.hp>0))break;
+    for(const e of foes.filter(f=>f.hp>0)){
+      const t=players.filter(p=>p.hp>0);if(!t.length)break;const target=t[Math.floor(Math.random()*t.length)];
+      if(e.sp>=e.card.sc&&Math.random()<0.5){e.sp-=e.card.sc;const dmg=Math.max(10,Math.floor(e.card.a*e.card.pow/100)-Math.floor(target.card.d/2));target.hp-=dmg;log.push(`${e.card.e} ${e.card.n} استخدم «${e.card.sk}» على ${target.card.n} بقوة ${dmg}!`)}
+      else{const dmg=Math.max(5,e.card.a-Math.floor(target.card.d/2));target.hp-=dmg;log.push(`${e.card.e} ${e.card.n} هاجم ${target.card.n} بقوة ${dmg}.`)}
+      if(target.hp<=0)log.push(`💀 ${target.card.n} سقط!`);
+    }
+  }
+  const win=!foes.some(f=>f.hp>0);
+  const coins=win?80+foes.length*40+Math.floor(Math.random()*60):20;
+  const ess=win?50+foes.length*30:10;
+  const xp=win?40+foes.length*25:10;
+  S.coins+=coins;S.essence+=ess;S.xp+=xp;
+  while(S.xp>=S.level*100){S.xp-=S.level*100;S.level++;S.essence+=200}
+  save();header();
+  log.push(win?`🏆 انتصار! حصلت على ${coins} عملة و${ess} جوهر غامض.`:`💔 هزيمة... لكنك حصلت على ${coins} عملة كتعويض.`);
+  modal(`<h1>${win?'🏆 انتصار!':'💔 هزيمة'}</h1><div class="log">${log.join('\n')}</div><p style="color:var(--gold)"><b>المكافأة: ${coins} عملة | ${ess} جوهر | ${xp} خبرة</b></p><button class="btn" onclick="closeModal();renderBattle()">إغلاق</button>`);
+}
+
+// ================= SETTINGS =================
+function renderSettings(){
+  const provs=[['local','محلي (دون إنترنت)'],['pollinations','Pollinations (مجاني، بدون مفتاح)'],['openrouter','OpenRouter (نماذج مجانية)'],['groq','Groq (مجاني)'],['gemini','Gemini (مجاني)']];
+  document.getElementById('app').innerHTML=`
+  <h1>⚙️ الإعدادات</h1>
+  <div class="panel"><h2>🤖 الراوي الذكي (نماذج مجانية)</h2><p class="dim">اختر مزود الذكاء الاصطناعي الذي يولّد القصص والحوارات:</p>
+  <select id="ai-provider">${provs.map(p=>`<option value="${p[0]}" ${S.aiProvider===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select>
+  <input id="ai-model" placeholder="اسم النموذج (اختياري)" value="${S.aiModel||''}">
+  <input id="ai-key" placeholder="مفتاح API (اختياري لـ Pollinations)" value="${S.aiKey||''}">
+  <button class="btn" onclick="saveAi()">💾 حفظ إعدادات الذكاء الاصطناعي</button>
+  <button class="btn alt" onclick="testAi()">🔌 اختبار الاتصال</button>
+  <p id="ai-test" class="dim"></p></div>
+  <div class="panel"><h2 style="color:#ff5252">🗑️ منطقة الخطر</h2><button class="btn danger" onclick="if(confirm('حذف كل التقدم؟')){localStorage.removeItem('lotm_save');location.reload()}">حذف كل التقدم</button></div>
+  <div class="panel"><h2>ℹ️ عن اللعبة</h2><p class="dim">لعبة بطاقات غاتشا نصية بعالم مفتوح مستوحاة من رواية «لورد الغامض» (Lord of the Mysteries) للكاتب Cuttlefish That Loves Diving. مشروع معجبين غير تجاري. جميع الشخصيات والأسماء ملك لأصحابها الأصليين.<br><br>الميزات: استدعاء غاتشا بنظام الشفقة، عالم مفتوح باختيارات تغيّر العالم، معارك بطاقات، وراوي ذكاء اصطناعي مجاني يولّد القصص.</p></div>`;
+}
+function saveAi(){S.aiProvider=document.getElementById('ai-provider').value;S.aiModel=document.getElementById('ai-model').value.trim();S.aiKey=document.getElementById('ai-key').value.trim();save();toast('تم الحفظ!')}
+async function testAi(){const out=document.getElementById('ai-test');out.textContent='⏳ جاري الاختبار...';const r=await aiNarrate('قل مرحباً بجملة واحدة قصيرة.');out.textContent=(r.fromAi?'✅ متصل بالذكاء الاصطناعي: ':'📝 وضع محلي: ')+r.text}
+
+// ================= NAV =================
+function switchScreen(s){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.s===s));
+  if(s==='gacha')renderGacha();else if(s==='world')renderWorld();else if(s==='collection')renderCollection();else if(s==='battle')renderBattle();else renderSettings();
+}
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>switchScreen(b.dataset.s)));
+header();renderGacha();
+</script>
+</body>
+</html>
