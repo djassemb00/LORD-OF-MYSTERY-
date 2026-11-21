@@ -46,6 +46,8 @@ class MainActivity : Activity() {
     private var currentScreen = "gacha"
     private var collectionFilter: Rarity? = null
     private val selectedTeam = mutableListOf<String>()
+    private var battleSession: BattleSession? = null
+    private var battleTargetIdx = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
