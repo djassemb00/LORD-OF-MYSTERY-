@@ -75,6 +75,35 @@ jobs:
           path: lord-of-mystery-gacha/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
+      - name: Create Release with APK
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v1.0.0"
+          APK="lord-of-mystery-gacha/app/build/outputs/apk/debug/app-debug.apk"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --title "لورد الغامض: غاتشا v1.0.0" \
+              --notes "لعبة بطاقات غاتشا نصية بعالم مفتوح مستوحاة من رواية لورد الغامض.
+
+          ## الميزات
+          - استدعاء غاتشا بنظام الشفقة (47 بطاقة)
+          - عالم مفتوح (12 مكاناً، 25 لقاءً باختيارات تغيّر العالم)
+          - قتال تفاعلي بالدور + قتال زعماء
+          - ترقية البطاقات حتى المستوى 10
+          - مهام يومية + 12 إنجازاً
+          - بانر محدود ببطاقات حصرية
+          - راوي ذكاء اصطناعي مجاني (Pollinations/OpenRouter/Groq/Gemini)
+
+          ## التثبيت
+          حمّل ملف APK وثبّته على هاتفك الأندرويد.
+
+          > مشروع معجبين غير تجاري. الرواية الأصلية ملك للكاتب Cuttlefish That Loves Diving."
+          fi
+
       - name: Build Summary
         if: always()
         run: |
