@@ -92,6 +92,39 @@ class SaveManager(context: Context) {
 
     fun hasCard(cardId: String): Boolean = (getOwnedCards()[cardId] ?: 0) > 0
 
+    // Card levels: cardId -> level (1..10)
+    fun getCardLevel(cardId: String): Int = prefs.getInt("lvl_$cardId", 1)
+
+    fun setCardLevel(cardId: String, level: Int) {
+        prefs.edit().putInt("lvl_$cardId", level.coerceIn(1, 10)).apply()
+    }
+
+    /** Upgrade cost in essence for next level. */
+    fun upgradeCost(cardId: String): Int = getCardLevel(cardId) * 100
+
+    // Daily quests: questId -> progress, and reset date
+    var questDate: String
+        get() = prefs.getString("questDate", "") ?: ""
+        set(v) = prefs.edit().putString("questDate", v).apply()
+
+    fun getQuestProgress(questId: String): Int = prefs.getInt("quest_$questId", 0)
+
+    fun setQuestProgress(questId: String, value: Int) {
+        prefs.edit().putInt("quest_$questId", value).apply()
+    }
+
+    fun addQuestProgress(questId: String, amount: Int = 1) {
+        setQuestProgress(questId, getQuestProgress(questId) + amount)
+    }
+
+    fun resetQuests() {
+        val editor = prefs.edit()
+        for (key in prefs.all.keys) {
+            if (key.startsWith("quest_")) editor.remove(key)
+        }
+        editor.apply()
+    }
+
     // World flags
     fun setFlag(flag: String) {
         val flags = getFlags().toMutableSet()

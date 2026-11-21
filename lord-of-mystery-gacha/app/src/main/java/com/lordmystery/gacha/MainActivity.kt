@@ -14,9 +14,12 @@ import com.lordmystery.gacha.data.CardDatabase
 import com.lordmystery.gacha.data.GameCard
 import com.lordmystery.gacha.data.Rarity
 import com.lordmystery.gacha.data.WorldDatabase
+import com.lordmystery.gacha.engine.Action
 import com.lordmystery.gacha.engine.AiNarrator
 import com.lordmystery.gacha.engine.BattleEngine
+import com.lordmystery.gacha.engine.BattleSession
 import com.lordmystery.gacha.engine.GachaEngine
+import com.lordmystery.gacha.engine.QuestEngine
 import com.lordmystery.gacha.engine.SaveManager
 import com.lordmystery.gacha.engine.WorldEngine
 
@@ -210,6 +213,26 @@ class MainActivity : Activity() {
         return scrollBox(col)
     }
 
+    /** Returns a copy of the card with stats scaled by its level (+15% per level). */
+    private fun leveledCard(card: GameCard): GameCard {
+        val level = save.getCardLevel(card.id)
+        if (level <= 1) return card
+        val mult = 1f + (level - 1) * 0.15f
+        return card.copy(
+            atk = (card.atk * mult).toInt(),
+            def = (card.def * mult).toInt(),
+            hp = (card.hp * mult).toInt()
+        )
+    }
+
+    private fun questDone(questId: String, amount: Int = 1) {
+        val q = QuestEngine.addProgress(save, questId, amount)
+        if (q != null) {
+            Toast.makeText(this, "🎯 مهمة مكتملة: ${q.title} (+${q.rewardEssence} جوهر +${q.rewardCoins} عملة)", Toast.LENGTH_LONG).show()
+            refreshTopBar()
+        }
+    }
+
     private fun doPull(count: Int) {
         val cost = if (count == 1) GachaEngine.COST_SINGLE else GachaEngine.COST_TEN
         if (save.essence < cost) {
@@ -218,14 +241,26 @@ class MainActivity : Activity() {
         }
         save.essence -= cost
         val pulled = GachaEngine.pull(save, count)
+        questDone("pull", count)
         // Find results container (first child of scroll content)
         val scroll = content.getChildAt(0) as ScrollView
         val col = scroll.getChildAt(0) as LinearLayout
         val results = col.tag as LinearLayout
         results.removeAllViews()
         results.addView(tv("— نتائج الاستدعاء —", 16f, gold, true))
-        for (card in pulled) {
-            results.addView(cardRow(card))
+        // Reveal animation: show cards one by one, best last with glow
+        val sorted = pulled.sortedByDescending { it.rarity.ordinal }
+        var delay = 0L
+        for (card in sorted) {
+            val row = cardRow(card)
+            row.alpha = 0f
+            results.addView(row)
+            row.animate().alpha(1f).setStartDelay(delay).setDuration(400).start()
+            delay += 250
+        }
+        val best = sorted.firstOrNull()
+        if (best != null && (best.rarity == Rarity.MYTHIC || best.rarity == Rarity.LEGENDARY)) {
+            results.addView(tv("✨ ${if (best.rarity == Rarity.MYTHIC) "إلهي!" else "أسطوري!"} حصلت على: ${best.emoji} ${best.nameAr}", 16f, best.rarity.color, true))
         }
         refreshTopBar()
         Toast.makeText(this, "حصلت على ${pulled.size} بطاقة!", Toast.LENGTH_SHORT).show()
@@ -308,18 +343,39 @@ class MainActivity : Activity() {
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
         box.setPadding(dp(16), dp(16), dp(16), dp(16))
+        val level = save.getCardLevel(card.id)
+        val mult = 1f + (level - 1) * 0.15f
         box.addView(tv("${card.emoji} ${card.nameAr}", 20f, gold, true))
         box.addView(tv("${card.nameEn}", 13f, textDim))
         box.addView(tv("${card.pathway} (${card.pathwayEn}) | تسلسل ${card.sequence}", 14f))
-        box.addView(tv("${card.rarity.labelAr} ${"★".repeat(card.rarity.stars)}", 14f, card.rarity.color))
-        box.addView(tv("⚔️ هجوم: ${card.atk}   🛡️ دفاع: ${card.def}   ❤️ صحة: ${card.hp}   🔮 روحانية: ${card.spirit}", 14f))
+        box.addView(tv("${card.rarity.labelAr} ${"★".repeat(card.rarity.stars)} | المستوى $level/10", 14f, card.rarity.color))
+        box.addView(tv("⚔️ هجوم: ${(card.atk * mult).toInt()}   🛡️ دفاع: ${(card.def * mult).toInt()}   ❤️ صحة: ${(card.hp * mult).toInt()}   🔮 روحانية: ${card.spirit}", 14f))
         box.addView(tv("✨ مهارة: ${card.skillName} (تكلفة ${card.skillCost})", 14f, gold, true))
         box.addView(tv(card.skillDesc, 13f, textDim))
         box.addView(tv("📖 ${card.lore}", 13f, textDim))
+        // Upgrade button
+        if (level < 10) {
+            val cost = save.upgradeCost(card.id)
+            val upBtn = btn("⬆️ ترقية إلى مستوى ${level + 1} (💎 $cost)") {
+                if (save.essence < cost) {
+                    Toast.makeText(this, "جوهر غامض غير كافٍ!", Toast.LENGTH_SHORT).show()
+                    return@btn
+                }
+                save.essence -= cost
+                save.setCardLevel(card.id, level + 1)
+                refreshTopBar()
+                Toast.makeText(this, "تمت ترقية ${card.nameAr} إلى مستوى ${level + 1}!", Toast.LENGTH_SHORT).show()
+                showCardDetail(card)
+            }
+            box.addView(upBtn)
+        } else {
+            box.addView(tv("⭐ وصلت إلى أقصى مستوى!", 14f, gold, true))
+        }
         val aiText = tv("", 13f, textMain)
         box.addView(aiText)
         val aiBtn = btn("🤖 توليد قصة بالذكاء الاصطناعي") {
             aiText.text = "⏳ جاري التفكير..."
+            questDone("ai")
             AiNarrator.narrate(save, "اكتب قصة قصيرة (3 جمل) عن ${card.nameAr} من ${card.pathway}، تسلسل ${card.sequence}.", object : AiNarrator.Callback {
                 override fun onResult(text: String, fromAi: Boolean) {
                     aiText.text = (if (fromAi) "🤖 " else "📝 ") + text
@@ -356,6 +412,16 @@ class MainActivity : Activity() {
         }
         col.addView(state)
 
+        // Daily quests
+        val questsBox = panelBox()
+        questsBox.addView(tv("🎯 المهام اليومية", 16f, gold, true))
+        for (q in QuestEngine.QUESTS) {
+            val prog = QuestEngine.progress(save, q.id)
+            val done = prog >= q.target
+            questsBox.addView(tv("${if (done) "✅" else "⬜"} ${q.title}: ${q.desc} ($prog/${q.target}) → 💎${q.rewardEssence} 🪙${q.rewardCoins}", 13f, if (done) gold else textDim))
+        }
+        col.addView(questsBox)
+
         // Travel
         col.addView(tv("🧭 السفر إلى:", 16f, gold, true))
         if (loc != null) {
@@ -363,6 +429,7 @@ class MainActivity : Activity() {
                 val dest = WorldDatabase.location(connId) ?: continue
                 val tb = btn("${dest.emoji} ${dest.nameAr} (خطر ${dest.danger}/10)") {
                     val msg = WorldEngine.travel(save, connId)
+                    questDone("travel")
                     Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                     showScreen("world")
                 }
@@ -471,9 +538,14 @@ class MainActivity : Activity() {
         Toast.makeText(this, "اختر فريقك ثم ابدأ المعركة!", Toast.LENGTH_LONG).show()
     }
 
-    // ---------- Battle Screen ----------
+    // ---------- Battle Screen (interactive turn-based) ----------
 
     private fun battleScreen(): View {
+        val session = battleSession
+        if (session != null && !session.over) {
+            return battleView(session)
+        }
+        battleSession = null
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
         col.setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -488,7 +560,8 @@ class MainActivity : Activity() {
 
         for (card in owned) {
             val selected = selectedTeam.contains(card.id)
-            val cb = btn("${if (selected) "✅" else "⬜"} ${card.emoji} ${card.nameAr} (${card.rarity.labelAr})", if (selected) gold else panel, if (selected) Color.BLACK else textMain) {
+            val level = save.getCardLevel(card.id)
+            val cb = btn("${if (selected) "✅" else "⬜"} ${card.emoji} ${card.nameAr} (${card.rarity.labelAr} Lv.$level)", if (selected) gold else panel, if (selected) Color.BLACK else textMain) {
                 if (selected) selectedTeam.remove(card.id)
                 else if (selectedTeam.size < 3) selectedTeam.add(card.id)
                 else Toast.makeText(this, "الفريق ممتلئ (3 كحد أقصى)", Toast.LENGTH_SHORT).show()
@@ -503,18 +576,93 @@ class MainActivity : Activity() {
                 Toast.makeText(this, "اختر بطاقة واحدة على الأقل", Toast.LENGTH_SHORT).show()
                 return@btn
             }
-            val team = selectedTeam.mapNotNull { CardDatabase.byId(it) }
+            val team = selectedTeam.mapNotNull { CardDatabase.byId(it) }.map { leveledCard(it) }
             val enemies = BattleEngine.generateEnemies(loc?.danger ?: 1, save.level)
-            val result = BattleEngine.simulate(team, enemies)
+            battleSession = BattleEngine.newSession(team, enemies)
+            battleTargetIdx = 0
+            showScreen("battle")
+        }
+        col.addView(fight)
+        return scrollBox(col)
+    }
+
+    private fun battleView(session: BattleSession): View {
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(dp(12), dp(12), dp(12), dp(12))
+
+        col.addView(tv("⚔️ المعركة — الجولة ${session.round}", 20f, gold, true))
+
+        // Player team status
+        col.addView(tv("🛡️ فريقك:", 15f, gold, true))
+        for (p in session.players) {
+            val bar = "█".repeat((p.hp.coerceAtLeast(0) * 10 / p.maxHp).coerceIn(0, 10)) + "░".repeat(10 - (p.hp.coerceAtLeast(0) * 10 / p.maxHp).coerceIn(0, 10))
+            col.addView(tv("${p.card.emoji} ${p.card.nameAr}: ❤️ ${p.hp.coerceAtLeast(0)}/${p.maxHp} $bar 🔮 ${p.spirit}", 13f, if (p.alive) textMain else textDim))
+        }
+
+        // Enemies (tap to target)
+        col.addView(tv("👹 الأعداء (اضغط لاختيار الهدف):", 15f, gold, true))
+        val foes = session.aliveFoes()
+        for ((i, e) in foes.withIndex()) {
+            val bar = "█".repeat((e.hp.coerceAtLeast(0) * 10 / e.maxHp).coerceIn(0, 10)) + "░".repeat(10 - (e.hp.coerceAtLeast(0) * 10 / e.maxHp).coerceIn(0, 10))
+            val marker = if (i == battleTargetIdx) "🎯" else "⬜"
+            val eb = btn("$marker ${e.card.emoji} ${e.card.nameAr}: ❤️ ${e.hp.coerceAtLeast(0)}/${e.maxHp} $bar", if (i == battleTargetIdx) gold else panel, if (i == battleTargetIdx) Color.BLACK else textMain) {
+                battleTargetIdx = i
+                showScreen("battle")
+            }
+            eb.textSize = 12f
+            col.addView(eb)
+        }
+
+        // Current player actions
+        val current = session.currentPlayer()
+        if (current != null) {
+            col.addView(tv("▶️ دور: ${current.card.emoji} ${current.card.nameAr}", 16f, gold, true))
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            val atkBtn = btn("⚔️ هجوم") { doBattleAction(Action.ATTACK) }
+            atkBtn.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            val skillBtn = btn("✨ ${current.card.skillName} (${current.card.skillCost}🔮)") { doBattleAction(Action.SKILL) }
+            skillBtn.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            row.addView(atkBtn); row.addView(skillBtn)
+            col.addView(row)
+            val row2 = LinearLayout(this)
+            row2.orientation = LinearLayout.HORIZONTAL
+            val defBtn = btn("🛡️ دفاع (+روحانية)") { doBattleAction(Action.DEFEND) }
+            defBtn.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            val fleeBtn = btn("🏃 هروب") { doBattleAction(Action.FLEE) }
+            fleeBtn.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            row2.addView(defBtn); row2.addView(fleeBtn)
+            col.addView(row2)
+        }
+
+        // Battle log
+        val logView = tv(session.log.joinToString("\n"), 12f, textDim)
+        logView.movementMethod = ScrollingMovementMethod()
+        logView.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(180))
+        col.addView(logView)
+
+        return scrollBox(col)
+    }
+
+    private fun doBattleAction(action: Action) {
+        val session = battleSession ?: return
+        val before = session.log.size
+        session.act(action, battleTargetIdx)
+        battleTargetIdx = 0
+        if (session.over) {
+            val result = session.result()
             save.coins += result.coins
             save.essence += result.essence
             save.xp += result.xp
-            // Level up
             while (save.xp >= save.level * 100) {
                 save.xp -= save.level * 100
                 save.level += 1
                 save.essence += 200
             }
+            if (result.victory) questDone("battle")
+            battleSession = null
             val logText = result.log.joinToString("\n")
             val box = LinearLayout(this)
             box.orientation = LinearLayout.VERTICAL
@@ -530,9 +678,10 @@ class MainActivity : Activity() {
                 refreshTopBar()
                 showScreen("battle")
             }.show()
+            refreshTopBar()
+        } else {
+            showScreen("battle")
         }
-        col.addView(fight)
-        return scrollBox(col)
     }
 
     // ---------- Settings Screen ----------
