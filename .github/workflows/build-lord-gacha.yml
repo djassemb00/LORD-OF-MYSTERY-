@@ -1,5 +1,8 @@
 name: Build Lord of Mystery Gacha APK
 
+permissions:
+  issues: write
+
 on:
   push:
     branches: ["**"]
