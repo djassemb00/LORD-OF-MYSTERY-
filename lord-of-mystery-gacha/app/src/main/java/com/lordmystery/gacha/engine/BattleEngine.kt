@@ -190,6 +190,23 @@ object BattleEngine {
         )
     }
 
+    /** Generate a boss: a high-rarity card with boosted stats. */
+    fun generateBoss(danger: Int): List<GameCard> {
+        val pool = CardDatabase.ALL.filter { it.rarity.ordinal >= 3 }
+        val base = pool[Random.nextInt(pool.size)]
+        val boost = 1.6f + danger * 0.05f
+        val boss = base.copy(
+            nameAr = "👑 زعيم: " + base.nameAr,
+            atk = (base.atk * boost).toInt(),
+            def = (base.def * boost).toInt(),
+            hp = (base.hp * boost).toInt(),
+            spirit = (base.spirit * boost).toInt()
+        )
+        // Boss + 1-2 minions
+        val minions = generateEnemies((danger / 2).coerceAtLeast(1), 1).take(2)
+        return listOf(boss) + minions
+    }
+
     fun simulate(playerTeam: List<GameCard>, enemies: List<GameCard>): BattleResult {
         val session = newSession(playerTeam, enemies)
         var guard = 0

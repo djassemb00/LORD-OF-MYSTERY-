@@ -15,6 +15,7 @@ import com.lordmystery.gacha.data.GameCard
 import com.lordmystery.gacha.data.Rarity
 import com.lordmystery.gacha.data.WorldDatabase
 import com.lordmystery.gacha.engine.Action
+import com.lordmystery.gacha.engine.AchievementEngine
 import com.lordmystery.gacha.engine.AiNarrator
 import com.lordmystery.gacha.engine.BattleEngine
 import com.lordmystery.gacha.engine.BattleSession
@@ -48,6 +49,7 @@ class MainActivity : Activity() {
     private val selectedTeam = mutableListOf<String>()
     private var battleSession: BattleSession? = null
     private var battleTargetIdx = 0
+    private var battleIsBoss = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -195,6 +197,20 @@ class MainActivity : Activity() {
         row.addView(b1); row.addView(b10)
         col.addView(row)
 
+        // Limited banner
+        val limitedBox = panelBox()
+        limitedBox.addView(tv("🌟 بانر محدود — بطاقات حصرية!", 16f, Color.parseColor("#FF8A65"), true))
+        limitedBox.addView(tv("بطاقات إلهية وأسطورية حصرية فقط. نسبة الإلهي 8%.", 12f, textDim))
+        val lrow = LinearLayout(this)
+        lrow.orientation = LinearLayout.HORIZONTAL
+        val lb1 = btn("سحبة محدودة\n💎 ${GachaEngine.COST_LIMITED_SINGLE}", Color.parseColor("#FF8A65")) { doPullLimited(1) }
+        lb1.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        val lb10 = btn("10 محدودة\n💎 ${GachaEngine.COST_LIMITED_TEN}", Color.parseColor("#FF8A65")) { doPullLimited(10) }
+        lb10.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        lrow.addView(lb1); lrow.addView(lb10)
+        limitedBox.addView(lrow)
+        col.addView(limitedBox)
+
         if (GachaEngine.dailyAvailable(save)) {
             val daily = btn("🎁 مكافأة يومية: 300 جوهر + 100 عملة") {
                 if (GachaEngine.claimDaily(save)) {
@@ -235,6 +251,42 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun checkAchievements() {
+        val newOnes = AchievementEngine.check(save)
+        for (ach in newOnes) {
+            Toast.makeText(this, "🏆 إنجاز: ${ach.title} (+${ach.rewardEssence} جوهر)", Toast.LENGTH_LONG).show()
+        }
+        if (newOnes.isNotEmpty()) refreshTopBar()
+    }
+
+    private fun doPullLimited(count: Int) {
+        val cost = if (count == 1) GachaEngine.COST_LIMITED_SINGLE else GachaEngine.COST_LIMITED_TEN
+        if (save.essence < cost) {
+            Toast.makeText(this, "جوهر غامض غير كافٍ!", Toast.LENGTH_LONG).show()
+            return
+        }
+        save.essence -= cost
+        val pulled = GachaEngine.pullLimited(save, count)
+        questDone("pull", count)
+        val scroll = content.getChildAt(0) as ScrollView
+        val col = scroll.getChildAt(0) as LinearLayout
+        val results = col.tag as LinearLayout
+        results.removeAllViews()
+        results.addView(tv("— نتائج البانر المحدود —", 16f, Color.parseColor("#FF8A65"), true))
+        val sorted = pulled.sortedByDescending { it.rarity.ordinal }
+        var delay = 0L
+        for (card in sorted) {
+            val row = cardRow(card)
+            row.alpha = 0f
+            results.addView(row)
+            row.animate().alpha(1f).setStartDelay(delay).setDuration(400).start()
+            delay += 250
+        }
+        refreshTopBar()
+        checkAchievements()
+        Toast.makeText(this, "حصلت على ${pulled.size} بطاقة محدودة!", Toast.LENGTH_SHORT).show()
+    }
+
     private fun doPull(count: Int) {
         val cost = if (count == 1) GachaEngine.COST_SINGLE else GachaEngine.COST_TEN
         if (save.essence < cost) {
@@ -265,6 +317,7 @@ class MainActivity : Activity() {
             results.addView(tv("✨ ${if (best.rarity == Rarity.MYTHIC) "إلهي!" else "أسطوري!"} حصلت على: ${best.emoji} ${best.nameAr}", 16f, best.rarity.color, true))
         }
         refreshTopBar()
+        checkAchievements()
         Toast.makeText(this, "حصلت على ${pulled.size} بطاقة!", Toast.LENGTH_SHORT).show()
     }
 
@@ -366,6 +419,10 @@ class MainActivity : Activity() {
                 save.essence -= cost
                 save.setCardLevel(card.id, level + 1)
                 refreshTopBar()
+                val maxAch = AchievementEngine.checkMaxCard(save, card.id)
+                if (maxAch != null) {
+                    Toast.makeText(this, "🏆 إنجاز: ${maxAch.title} (+${maxAch.rewardEssence} جوهر)", Toast.LENGTH_LONG).show()
+                }
                 Toast.makeText(this, "تمت ترقية ${card.nameAr} إلى مستوى ${level + 1}!", Toast.LENGTH_SHORT).show()
                 showCardDetail(card)
             }
@@ -431,7 +488,9 @@ class MainActivity : Activity() {
                 val dest = WorldDatabase.location(connId) ?: continue
                 val tb = btn("${dest.emoji} ${dest.nameAr} (خطر ${dest.danger}/10)") {
                     val msg = WorldEngine.travel(save, connId)
+                    save.setFlag("visited_$connId")
                     questDone("travel")
+                    checkAchievements()
                     Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                     showScreen("world")
                 }
@@ -442,6 +501,15 @@ class MainActivity : Activity() {
         // Explore
         val explore = btn("🔍 استكشف المنطقة (لقاء عشوائي)") { showEncounter() }
         col.addView(explore)
+
+        // Boss fight (dangerous locations only)
+        if (loc != null && loc.danger >= 7) {
+            val bossBtn = btn("👑 قتال الزعيم! (مكافآت ضخمة — خطر ${loc.danger}/10)", Color.parseColor("#B71C1C"), Color.WHITE) {
+                startBossFight()
+            }
+            col.addView(bossBtn)
+            col.addView(tv("زعماء مهزومون: ${save.bossKills}", 13f, textDim))
+        }
 
         // AI narrate
         val aiBox = panelBox()
@@ -528,6 +596,25 @@ class MainActivity : Activity() {
             box.addView(cb)
         }
         dialog.show()
+    }
+
+    private fun startBossFight() {
+        val owned = save.getOwnedCards().keys.mapNotNull { CardDatabase.byId(it) }
+        if (owned.isEmpty()) {
+            Toast.makeText(this, "تحتاج بطاقة واحدة على الأقل للقتال! استدعِ أولاً.", Toast.LENGTH_LONG).show()
+            return
+        }
+        // Auto-pick top 3 by attack
+        val team = owned.sortedByDescending { it.atk }.take(3).map { leveledCard(it) }
+        val loc = WorldDatabase.location(save.locationId)
+        val bosses = BattleEngine.generateBoss(loc?.danger ?: 7)
+        battleSession = BattleEngine.newSession(team, bosses)
+        battleIsBoss = true
+        battleTargetIdx = 0
+        currentScreen = "battle"
+        buildNav()
+        showScreen("battle")
+        Toast.makeText(this, "👑 الزعيم ينتظرك! اختر أهدافك بحكمة.", Toast.LENGTH_LONG).show()
     }
 
     private fun startBattleFromWorld() {
@@ -657,6 +744,15 @@ class MainActivity : Activity() {
         battleTargetIdx = 0
         if (session.over) {
             val result = session.result()
+            var bonusCoins = 0
+            var bonusEssence = 0
+            if (result.victory && battleIsBoss) {
+                save.bossKills += 1
+                bonusCoins = 300
+                bonusEssence = 250
+                save.coins += bonusCoins
+                save.essence += bonusEssence
+            }
             save.coins += result.coins
             save.essence += result.essence
             save.xp += result.xp
@@ -666,7 +762,9 @@ class MainActivity : Activity() {
                 save.essence += 200
             }
             if (result.victory) questDone("battle")
+            checkAchievements()
             battleSession = null
+            battleIsBoss = false
             val logText = result.log.joinToString("\n")
             val box = LinearLayout(this)
             box.orientation = LinearLayout.VERTICAL
@@ -678,6 +776,9 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(300))
             box.addView(logView)
             box.addView(tv("المكافأة: ${result.coins} عملة | ${result.essence} جوهر | ${result.xp} خبرة", 14f, gold, true))
+            if (bonusCoins > 0) {
+                box.addView(tv("👑 مكافأة الزعيم: +$bonusCoins عملة | +$bonusEssence جوهر", 14f, Color.parseColor("#FF8A65"), true))
+            }
             AlertDialog.Builder(this).setView(box).setPositiveButton("إغلاق") { _, _ ->
                 refreshTopBar()
                 showScreen("battle")
@@ -772,6 +873,15 @@ class MainActivity : Activity() {
         }
         danger.addView(reset)
         col.addView(danger)
+
+        // Achievements
+        val achBox = panelBox()
+        achBox.addView(tv("🏆 الإنجازات (${save.getAchievements().size}/${AchievementEngine.ALL.size})", 16f, gold, true))
+        for (ach in AchievementEngine.ALL) {
+            val unlocked = save.getAchievements().contains(ach.id)
+            achBox.addView(tv("${if (unlocked) "✅" else "⬜"} ${ach.title}: ${ach.desc} (+${ach.rewardEssence} جوهر)", 13f, if (unlocked) gold else textDim))
+        }
+        col.addView(achBox)
 
         val about = panelBox()
         about.addView(tv("ℹ️ عن اللعبة", 16f, gold, true))

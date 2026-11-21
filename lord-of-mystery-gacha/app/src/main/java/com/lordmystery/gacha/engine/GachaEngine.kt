@@ -56,6 +56,33 @@ object GachaEngine {
         return pool[Random.nextInt(pool.size)]
     }
 
+    const val COST_LIMITED_SINGLE = 200
+    const val COST_LIMITED_TEN = 2000
+
+    /** Limited banner: only limited cards, boosted MYTHIC rate (8%). No pity. */
+    fun pullLimited(save: SaveManager, count: Int): List<GameCard> {
+        val results = mutableListOf<GameCard>()
+        val limited = CardDatabase.ALL.filter { it.isLimited }
+        repeat(count) {
+            val roll = Random.nextDouble(100.0)
+            val card = when {
+                roll < 8.0 -> {
+                    val pool = limited.filter { it.rarity == Rarity.MYTHIC }
+                    pool[Random.nextInt(pool.size)]
+                }
+                roll < 8.0 + 20.0 -> {
+                    val pool = limited.filter { it.rarity == Rarity.LEGENDARY }
+                    if (pool.isEmpty()) limited[Random.nextInt(limited.size)]
+                    else pool[Random.nextInt(pool.size)]
+                }
+                else -> limited[Random.nextInt(limited.size)]
+            }
+            results.add(card)
+            save.addCard(card.id)
+        }
+        return results
+    }
+
     /** Daily reward: 300 essence + 100 coins, once per 20 hours. */
     fun claimDaily(save: SaveManager): Boolean {
         val now = System.currentTimeMillis()

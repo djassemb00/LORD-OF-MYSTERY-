@@ -140,6 +140,26 @@ class SaveManager(context: Context) {
         return raw.split(",").toSet()
     }
 
+    // Boss kills
+    var bossKills: Int
+        get() = prefs.getInt("bossKills", 0)
+        set(v) = prefs.edit().putInt("bossKills", v).apply()
+
+    // Achievements: set of ids
+    fun unlockAchievement(id: String): Boolean {
+        val set = getAchievements().toMutableSet()
+        if (set.contains(id)) return false
+        set.add(id)
+        prefs.edit().putString("achievements", set.joinToString(",")).apply()
+        return true
+    }
+
+    fun getAchievements(): Set<String> {
+        val raw = prefs.getString("achievements", "") ?: ""
+        if (raw.isEmpty()) return emptySet()
+        return raw.split(",").toSet()
+    }
+
     // AI settings
     var aiProvider: String
         get() = prefs.getString("aiProvider", "local") ?: "local"

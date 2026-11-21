@@ -158,7 +158,30 @@ const QUESTS=[
 ];
 
 // ================= SAVE =================
-let S=JSON.parse(localStorage.getItem('lotm_save')||'null')||{essence:3000,coins:500,pity:0,sanity:100,spirituality:100,location:'tingen',level:1,xp:0,cards:{},levels:{},repN:0,repS:0,repT:0,repA:0,repC:0,flags:[],aiProvider:'pollinations',aiModel:'',aiKey:'',lastDaily:0,questDate:'',quests:{}};
+let S=JSON.parse(localStorage.getItem('lotm_save')||'null')||{essence:3000,coins:500,pity:0,sanity:100,spirituality:100,location:'tingen',level:1,xp:0,cards:{},levels:{},repN:0,repS:0,repT:0,repA:0,repC:0,flags:[],aiProvider:'pollinations',aiModel:'',aiKey:'',lastDaily:0,questDate:'',quests:{},bossKills:0,achievements:[]};
+const ACHIEVEMENTS=[
+{id:'first_pull',t:'أول استدعاء',d:'استدعِ بطاقتك الأولى',ess:50},
+{id:'collector_10',t:'جامع البطاقات',d:'اجمع 10 بطاقات مختلفة',ess:100},
+{id:'collector_25',t:'خبير المجموعة',d:'اجمع 25 بطاقة مختلفة',ess:200},
+{id:'mythic_one',t:'المختار',d:'احصل على بطاقة إلهية',ess:300},
+{id:'mythic_five',t:'أسطورة حية',d:'اجمع 5 بطاقات إلهية',ess:500},
+{id:'boss_slayer',t:'قاتل الزعماء',d:'اهزم زعيماً واحداً',ess:200},
+{id:'boss_master',t:'سيد العالم',d:'اهزم 5 زعماء',ess:500},
+{id:'traveler',t:'المسافر',d:'زر 5 أماكن مختلفة',ess:100},
+{id:'rich',t:'الثري',d:'اجمع 2000 عملة',ess:100},
+{id:'level_5',t:'صاعد',d:'وصل إلى المستوى 5',ess:150},
+{id:'level_10',t:'أسطوري',d:'وصل إلى المستوى 10',ess:400},
+{id:'max_card',t:'الكمال',d:'ارفع بطاقة إلى المستوى 10',ess:300}
+];
+function checkAchievements(){
+  const owned=Object.keys(S.cards).length;
+  const mythic=Object.keys(S.cards).filter(id=>{const c=CARDS.find(x=>x.id===id);return c&&c.r==='MYTHIC'}).length;
+  const visited=S.flags.filter(f=>f.startsWith('visited_')).length;
+  const checks={first_pull:owned>=1,collector_10:owned>=10,collector_25:owned>=25,mythic_one:mythic>=1,mythic_five:mythic>=5,boss_slayer:S.bossKills>=1,boss_master:S.bossKills>=5,traveler:visited>=5,rich:S.coins>=2000,level_5:S.level>=5,level_10:S.level>=10,max_card:Object.values(S.levels).some(l=>l>=10)};
+  let newOnes=[];
+  for(const a of ACHIEVEMENTS){if(checks[a.id]&&!S.achievements.includes(a.id)){S.achievements.push(a.id);S.essence+=a.ess;newOnes.push(a)}}
+  if(newOnes.length){save();header();newOnes.forEach(a=>toast(`🏆 إنجاز: ${a.t} (+${a.ess} جوهر)`))}
+}
 function save(){localStorage.setItem('lotm_save',JSON.stringify(S))}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
 function header(){document.getElementById('h-essence').textContent='💎 '+S.essence;document.getElementById('h-coins').textContent='🪙 '+S.coins;document.getElementById('h-level').textContent='⭐ Lv.'+S.level}
@@ -213,14 +236,23 @@ function doPull(n){
   if(S.essence<cost){toast('جوهر غامض غير كافٍ! العب في العالم أو انتظر المكافأة اليومية.');return}
   S.essence-=cost;const out=[];
   for(let i=0;i<n;i++){const c=rollOne();out.push(c);S.cards[c.id]=(S.cards[c.id]||0)+1;S.pity=c.r==='MYTHIC'?0:S.pity+1;}
-  save();questDone('pull',n);header();renderGacha(out);
+  save();questDone('pull',n);header();checkAchievements();renderGacha(out);
   toast('حصلت على '+out.length+' بطاقة!');
+}
+function doPullLimited(n){
+  const cost=n===1?200:2000;
+  if(S.essence<cost){toast('جوهر غامض غير كافٍ!');return}
+  S.essence-=cost;const out=[];const limited=CARDS.filter(c=>c.r==='MYTHIC'||c.r==='LEGENDARY');
+  for(let i=0;i<n;i++){const roll=Math.random()*100;let pool;if(roll<8)pool=limited.filter(c=>c.r==='MYTHIC');else if(roll<28)pool=limited.filter(c=>c.r==='LEGENDARY');else pool=limited;const c=pool[Math.floor(Math.random()*pool.length)];out.push(c);S.cards[c.id]=(S.cards[c.id]||0)+1}
+  save();questDone('pull',n);header();checkAchievements();renderGacha(out);
+  toast('حصلت على '+out.length+' بطاقة محدودة!');
 }
 function renderGacha(pulled){
   const app=document.getElementById('app');
   let h=`<div class="panel"><h1>✨ بوابة الضباب الرمادي ✨</h1><p class="dim">استدعِ شخصيات وكائنات من عالم لورد الغامض. كل استدعاء قد يغيّر مصيرك.</p><p class="dim">نسب الأسطوري: 12% | الملحمي: 25% | النادر: 35% | الشائع: 25% | الإلهي: 3% (+3% بعد 70 سحبة، مضمون عند 90)</p></div>`;
   h+=`<p style="color:var(--gold);font-weight:bold">سحبات حتى الإلهي المضمون: ${90-S.pity}</p>`;
   h+=`<div class="row"><button class="btn" onclick="doPull(1)">سحبة واحدة<br>💎 160</button><button class="btn" onclick="doPull(10)">10 سحبات<br>💎 1600</button></div>`;
+  h+=`<div class="panel" style="border-color:#ff8a65"><h2 style="color:#ff8a65">🌟 بانر محدود — بطاقات حصرية!</h2><p class="dim">بطاقات إلهية وأسطورية حصرية فقط. نسبة الإلهي 8%.</p><div class="row"><button class="btn" style="background:#ff8a65" onclick="doPullLimited(1)">سحبة محدودة<br>💎 200</button><button class="btn" style="background:#ff8a65" onclick="doPullLimited(10)">10 محدودة<br>💎 2000</button></div></div>`;
   if(Date.now()-S.lastDaily>=20*3600*1000)h+=`<button class="btn alt" onclick="claimDaily()">🎁 مكافأة يومية: 300 جوهر + 100 عملة</button>`;
   if(pulled){const sorted=[...pulled].sort((a,b)=>['COMMON','RARE','EPIC','LEGENDARY','MYTHIC'].indexOf(b.r)-['COMMON','RARE','EPIC','LEGENDARY','MYTHIC'].indexOf(a.r));h+=`<h2>— نتائج الاستدعاء —</h2>`+sorted.map(c=>cardRow(c)).join('');const best=sorted[0];if(best&&(best.r==='MYTHIC'||best.r==='LEGENDARY'))h+=`<p style="color:${RARITIES[best.r].color};font-weight:bold;font-size:17px">✨ ${best.r==='MYTHIC'?'إلهي!':'أسطوري!'} حصلت على: ${best.e} ${best.n}</p>`}
   app.innerHTML=h;
@@ -249,11 +281,12 @@ function renderWorld(){
   h+=`<div class="panel"><h2>🎯 المهام اليومية</h2>`+QUESTS.map(q=>{const p=questProg(q.id);const done=p>=q.target;return `<p class="dim" style="${done?'color:var(--gold)':''}">${done?'✅':'⬜'} ${q.t}: ${q.d} (${p}/${q.target}) → 💎${q.ess} 🪙${q.coins}</p>`}).join('')+`</div>`;
   h+=`<h2>🧭 السفر إلى:</h2>`+l.conn.map(id=>{const d=LOCATIONS.find(x=>x.id===id);return `<button class="btn alt" onclick="travel('${id}')">${d.e} ${d.n} (خطر ${d.danger}/10)</button>`}).join('');
   h+=`<button class="btn" onclick="showEncounter()">🔍 استكشف المنطقة (لقاء عشوائي)</button>`;
+  if(l.danger>=7)h+=`<button class="btn danger" onclick="startBoss()">👑 قتال الزعيم! (مكافآت ضخمة — خطر ${l.danger}/10)</button><p class="dim">زعماء مهزومون: ${S.bossKills}</p>`;
   h+=`<div class="panel"><p id="ai-world" class="dim">🤖 الراوي الذكي: اضغط الزر لوصف ما يحدث حولك الآن.</p><button class="btn" onclick="worldAi()">🤖 اسأل الراوي الذكي</button></div>`;
   h+=`<div class="row"><button class="btn alt" onclick="rest()">😴 راحة (20 عملة)</button><button class="btn alt" onclick="work()">💼 عمل (60 عملة)</button></div>`;
   document.getElementById('app').innerHTML=h;
 }
-function travel(id){S.location=id;S.spirituality=Math.max(0,S.spirituality-5);S.sanity=Math.max(0,S.sanity-2);save();questDone('travel');header();toast('سافرت إلى '+loc().n);renderWorld()}
+function travel(id){S.location=id;S.spirituality=Math.max(0,S.spirituality-5);S.sanity=Math.max(0,S.sanity-2);if(!S.flags.includes('visited_'+id))S.flags.push('visited_'+id);save();questDone('travel');header();checkAchievements();toast('سافرت إلى '+loc().n);renderWorld()}
 function rest(){if(S.coins<20){toast('عملات غير كافية');return}S.coins-=20;S.spirituality=100;S.sanity=Math.min(100,S.sanity+20);save();header();toast('استرحت واستعدت روحانيتك.');renderWorld()}
 function work(){S.coins+=60;S.spirituality=Math.max(0,S.spirituality-15);S.sanity=Math.max(0,S.sanity-5);save();header();toast('عملت وكسبت 60 عملة.');renderWorld()}
 async function worldAi(){const out=document.getElementById('ai-world');out.textContent='⏳ جاري الاتصال بالذكاء الاصطناعي...';questDone('ai');const r=await aiNarrate(`صف مشهداً غامضاً يحدث الآن في ${loc().n}. ${worldSummary()}`);out.textContent=(r.fromAi?'🤖 ':'📝 ')+r.text}
@@ -292,6 +325,18 @@ function setFilter(f){filter=f==='الكل'?null:f;renderCollection()}
 // ================= BATTLE (interactive turn-based) =================
 let team=[], session=null, targetIdx=0;
 function genEnemies(danger){const count=Math.max(2,Math.min(4,2+Math.floor(danger/3)));const maxIdx=Math.floor(danger/3);const pool=CARDS.filter(c=>['COMMON','RARE','EPIC','LEGENDARY'].indexOf(c.r)<=maxIdx);const out=[];for(let i=0;i<count;i++)out.push(pool[Math.floor(Math.random()*pool.length)]);return out}
+let battleIsBoss=false;
+function genBoss(danger){const pool=CARDS.filter(c=>['LEGENDARY','MYTHIC'].includes(c.r));const base=pool[Math.floor(Math.random()*pool.length)];const boost=1.6+danger*0.05;const boss={...base,n:'👑 زعيم: '+base.n,a:Math.floor(base.a*boost),d:Math.floor(base.d*boost),h:Math.floor(base.h*boost),sp:Math.floor(base.sp*boost)};return[boss,...genEnemies(Math.max(1,Math.floor(danger/2))).slice(0,2)]}
+function startBoss(){
+  const owned=Object.keys(S.cards).map(id=>CARDS.find(c=>c.id===id)).filter(Boolean);
+  if(!owned.length){toast('تحتاج بطاقة واحدة على الأقل للقتال! استدعِ أولاً.');return}
+  team=owned.sort((a,b)=>b.a-a.a).slice(0,3).map(c=>c.id);
+  const players=team.map(id=>{const c=leveled(CARDS.find(x=>x.id===id));return{card:c,hp:c.h,sp:c.sp,def:false}});
+  const foes=genBoss(loc().danger).map(c=>({card:c,hp:c.h,sp:c.sp,def:false}));
+  session={players,foes,log:['👑 الزعيم ينتظرك! الجولة 1 — اختر إجراءً للبطاقة الأولى.'],round:1,idx:0,over:false,win:false};
+  battleIsBoss=true;targetIdx=0;switchScreen('battle');
+  toast('👑 الزعيم ينتظرك! اختر أهدافك بحكمة.');
+}
 function hpbar(hp,max){const f=Math.max(0,Math.min(10,Math.floor(hp*10/max)));return '█'.repeat(f)+'░'.repeat(10-f)}
 function renderBattle(){
   if(session&&!session.over){renderBattleView();return}
@@ -384,11 +429,13 @@ function finish(win){
   const coins=win?80+s.foes.length*40+Math.floor(Math.random()*60):20;
   const ess=win?50+s.foes.length*30:10;
   const xp=win?40+s.foes.length*25:10;
+  let bonusCoins=0,bonusEss=0;
+  if(win&&battleIsBoss){S.bossKills++;bonusCoins=300;bonusEss=250;S.coins+=bonusCoins;S.essence+=bonusEss}
   S.coins+=coins;S.essence+=ess;S.xp+=xp;
   while(S.xp>=S.level*100){S.xp-=S.level*100;S.level++;S.essence+=200}
   if(win)questDone('battle');
-  save();header();session=null;
-  modal(`<h1>${win?'🏆 انتصار!':'💔 هزيمة'}</h1><div class="log">${s.log.join('\n')}</div><p style="color:var(--gold)"><b>المكافأة: ${coins} عملة | ${ess} جوهر | ${xp} خبرة</b></p><button class="btn" onclick="closeModal();renderBattle()">إغلاق</button>`);
+  save();header();session=null;battleIsBoss=false;checkAchievements();
+  modal(`<h1>${win?'🏆 انتصار!':'💔 هزيمة'}</h1><div class="log">${s.log.join('\n')}</div><p style="color:var(--gold)"><b>المكافأة: ${coins} عملة | ${ess} جوهر | ${xp} خبرة</b></p>${bonusCoins?`<p style="color:#ff8a65"><b>👑 مكافأة الزعيم: +${bonusCoins} عملة | +${bonusEss} جوهر</b></p>`:''}<button class="btn" onclick="closeModal();renderBattle()">إغلاق</button>`);
 }
 
 // ================= SETTINGS =================
@@ -403,6 +450,7 @@ function renderSettings(){
   <button class="btn" onclick="saveAi()">💾 حفظ إعدادات الذكاء الاصطناعي</button>
   <button class="btn alt" onclick="testAi()">🔌 اختبار الاتصال</button>
   <p id="ai-test" class="dim"></p></div>
+  <div class="panel"><h2>🏆 الإنجازات (${S.achievements.length}/${ACHIEVEMENTS.length})</h2>${ACHIEVEMENTS.map(a=>`<p class="dim" style="${S.achievements.includes(a.id)?'color:var(--gold)':''}">${S.achievements.includes(a.id)?'✅':'⬜'} ${a.t}: ${a.d} (+${a.ess} جوهر)</p>`).join('')}</div>
   <div class="panel"><h2 style="color:#ff5252">🗑️ منطقة الخطر</h2><button class="btn danger" onclick="if(confirm('حذف كل التقدم؟')){localStorage.removeItem('lotm_save');location.reload()}">حذف كل التقدم</button></div>
   <div class="panel"><h2>ℹ️ عن اللعبة</h2><p class="dim">لعبة بطاقات غاتشا نصية بعالم مفتوح مستوحاة من رواية «لورد الغامض» (Lord of the Mysteries) للكاتب Cuttlefish That Loves Diving. مشروع معجبين غير تجاري. جميع الشخصيات والأسماء ملك لأصحابها الأصليين.<br><br>الميزات: استدعاء غاتشا بنظام الشفقة، عالم مفتوح باختيارات تغيّر العالم، معارك بطاقات تفاعلية، ترقية البطاقات، مهام يومية، وراوي ذكاء اصطناعي مجاني يولّد القصص.</p></div>`;
 }
