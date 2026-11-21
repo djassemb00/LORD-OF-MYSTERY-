@@ -449,6 +449,7 @@ class MainActivity : Activity() {
         aiBox.addView(aiText)
         val aiBtn = btn("🤖 اسأل الراوي الذكي") {
             aiText.text = "⏳ جاري الاتصال بالذكاء الاصطناعي..."
+            questDone("ai")
             val prompt = "صف مشهداً غامضاً يحدث الآن في ${loc?.nameAr}. ${WorldEngine.worldSummary(save)}"
             AiNarrator.narrate(save, prompt, object : AiNarrator.Callback {
                 override fun onResult(text: String, fromAi: Boolean) {
@@ -503,6 +504,7 @@ class MainActivity : Activity() {
                     startBattleFromWorld()
                     return@btn
                 }
+                questDone("explore")
                 val result = WorldEngine.applyChoice(save, choice)
                 dialog.dismiss()
                 val resBox = LinearLayout(this)
